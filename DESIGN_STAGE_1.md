@@ -1,8 +1,13 @@
 # Job Processing System – Stage 1
 
+## 📌 Stage 1 Summary
+Stage 1 implements a **minimal working job processing system**. It allows users to submit jobs and observe their lifecycle, with basic CPU-bound and I/O-bound task simulations. This stage focuses on validating the **end-to-end flow**, logging, and minimal API behavior without background queues, retries, or scaling.
+
+---
+
 ## 1️⃣ Problem Statement
-This system allows users to submit jobs and view their results.
-Stage 1 focuses on a **minimal working loop** with synchronous processing to ensure the end-to-end job lifecycle works and to simulate CPU/I-O-bound tasks for testing concurrency limits.
+This system allows users to submit jobs and view their results.  
+Stage 1 focuses on a **minimal working loop** with synchronous and simulated asynchronous processing to ensure the end-to-end job lifecycle works and to simulate CPU/I-O-bound tasks for testing concurrency limits.
 
 ---
 
@@ -11,9 +16,10 @@ Stage 1 focuses on a **minimal working loop** with synchronous processing to ens
 - Jobs stored in MongoDB (or any preferred DB)
 - Synchronous job processing executed immediately on submission
 - Minimal logging
-- CPU-bound simulation using `while` loop (optional)
-- I/O-bound simulation using `setTimeout` to mimic slow operations
+- CPU-bound simulation using `while` loop (blocks Node.js for long tasks; acceptable for Stage 1)
+- I/O-bound simulation using `setTimeout` to mimic slow operations asynchronously
 - No queue, no background workers, no scaling
+- Single-process sessions only (no global session store yet)
 
 ---
 
@@ -28,7 +34,7 @@ Stage 1 focuses on a **minimal working loop** with synchronous processing to ens
 ## 4️⃣ API Endpoints
 - `POST /jobs` → Submit a new job
 - `GET /jobs/:id` → Retrieve job status/result
-- `GET /jobs` → (Optional) List all jobs
+- `GET /jobs` → (Optional) List all jobs (not optimized for large datasets yet)
 
 ---
 
@@ -36,7 +42,8 @@ Stage 1 focuses on a **minimal working loop** with synchronous processing to ens
 - Node.js API handles job creation and starts execution immediately
 - Jobs stored in DB with lifecycle: `CREATED` → `RUNNING` → `FINISHED`
 - Minimal input validation
-- CPU/I-O simulation after response to avoid blocking main thread
+- CPU-bound simulation may block Node.js (`while` loop); acceptable for Stage 1
+- I/O-bound simulation uses `setTimeout` to mimic async behavior
 - Response sent immediately with `Job started` message
 - Background simulation continues updating job status (`FAILED` or `FINISHED`) in DB
 - Console logging for all state changes for postmortem testing
@@ -55,8 +62,8 @@ Stage 1 focuses on a **minimal working loop** with synchronous processing to ens
 - CPU/I-O simulation demonstrates asynchronous behavior
 
 ### ⚠️ Limitations
-- Long tasks still block Node if CPU-bound simulation uses `while` loop
-- Only one job processed per thread at a time (for CPU-bound blocking tasks)
+- CPU-bound simulation can block Node.js event loop for long tasks
+- Only one job processed per process for CPU-bound tasks
 - No retries or failure handling
 - Memory-based sessions (single process only) → not suitable for clusters
 - Not designed for heavy load or multiple users
