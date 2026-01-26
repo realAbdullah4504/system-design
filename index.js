@@ -56,14 +56,13 @@ app.post("/jobs/:id/run", async (req, res) => {
   job.status = "RUNNING";
   await job.save();
   // Simulate CPU-heavy blocking task (2-5s)
+  res.json({ message: "Job started", job });
+  
   const duration = Math.floor(Math.random() * 3000) + 2000;
   const start = Date.now();
   //   while (Date.now() - start < duration) {} // blocks Node
 
   await simulateIODelay(duration);
-  res.json({ message: "Job started", job });
-
-
   // Random failure simulation
   if (Math.random() < 0.3) {
     job.status = "FAILED";

@@ -2,7 +2,7 @@
 
 ## 1️⃣ Problem Statement
 This system allows users to submit jobs and view their results.
-Stage 1 focuses on a **minimal working loop** with synchronous processing to ensure the end-to-end job lifecycle works and to simulate CPU-bound tasks for testing concurrency limits.
+Stage 1 focuses on a **minimal working loop** with synchronous processing to ensure the end-to-end job lifecycle works and to simulate CPU/I-O-bound tasks for testing concurrency limits.
 
 ---
 
@@ -11,8 +11,8 @@ Stage 1 focuses on a **minimal working loop** with synchronous processing to ens
 - Jobs stored in MongoDB (or any preferred DB)
 - Synchronous job processing executed immediately on submission
 - Minimal logging
-- CPU-bound simulation using `while` loop
-- Optional I/O simulation using `setTimeout` to mimic slow operations
+- CPU-bound simulation using `while` loop (optional)
+- I/O-bound simulation using `setTimeout` to mimic slow operations
 - No queue, no background workers, no scaling
 
 ---
@@ -33,12 +33,13 @@ Stage 1 focuses on a **minimal working loop** with synchronous processing to ens
 ---
 
 ## 5️⃣ Implementation Notes
-- Node.js API handles all job processing **synchronously**
+- Node.js API handles job creation and starts execution immediately
 - Jobs stored in DB with lifecycle: `CREATED` → `RUNNING` → `FINISHED`
-- Minimal validation for input
-- CPU-bound simulation via blocking `while` loop
-- I/O-bound simulation via `setTimeout` (optional)
-- Simple logging for job creation, start, finish, or failure
+- Minimal input validation
+- CPU/I-O simulation after response to avoid blocking main thread
+- Response sent immediately with `Job started` message
+- Background simulation continues updating job status (`FAILED` or `FINISHED`) in DB
+- Console logging for all state changes for postmortem testing
 - Single-user and low concurrency assumed
 - **Sessions are in-memory only** (no global store yet)
 
@@ -47,14 +48,15 @@ Stage 1 focuses on a **minimal working loop** with synchronous processing to ens
 ## 6️⃣ Stage 1 Postmortem
 
 ### ✅ Works
-- Job creation and synchronous processing complete correctly
-- API endpoints respond as expected
-- Job lifecycle transitions observable (`CREATED` → `RUNNING` → `FINISHED`)
-- CPU-bound simulation demonstrates blocking behavior for testing
+- Job creation and execution triggers correctly
+- Response sent immediately to client (`Job started`)
+- Job lifecycle updates (`RUNNING` → `FAILED`/`FINISHED`) logged in console
+- Polling `/jobs/:id` shows final status
+- CPU/I-O simulation demonstrates asynchronous behavior
 
 ### ⚠️ Limitations
-- Long jobs block the API → concurrent requests fail to progress
-- Only one job processed per thread at a time
+- Long tasks still block Node if CPU-bound simulation uses `while` loop
+- Only one job processed per thread at a time (for CPU-bound blocking tasks)
 - No retries or failure handling
 - Memory-based sessions (single process only) → not suitable for clusters
 - Not designed for heavy load or multiple users
@@ -62,7 +64,7 @@ Stage 1 focuses on a **minimal working loop** with synchronous processing to ens
 ### 🧠 Assumptions
 - Jobs are short (<2–3 seconds)
 - Single-user or minimal concurrency
-- CPU/I-O simulation only, not real production load
+- CPU/I-O simulation after response mimics background execution
 - Sessions are in-memory; Stage 3 will introduce shared session store when clustering
 
 ### 🔧 Next Stage Triggers
@@ -73,10 +75,10 @@ Stage 1 focuses on a **minimal working loop** with synchronous processing to ens
 ---
 
 ## 7️⃣ Metrics / Observations (Optional)
-- Time taken per job: 2–5 seconds (including CPU-bound simulation)
-- Number of jobs processed concurrently: 1 per process
-- Logs show correct job state transitions
-- API blocked while CPU-bound tasks run → triggers Stage 2 improvements
+- Time taken per job: 2–5 seconds (including simulation)
+- Number of jobs processed concurrently: 1 per process for CPU-bound tasks
+- Logs show correct state transitions
+- API responds immediately while simulation continues in background
 
 ---
 
