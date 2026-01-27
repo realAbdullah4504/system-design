@@ -35,31 +35,6 @@ const worker = new Worker(
   }
 );
 
-// --- QueueEvents listen for failed jobs ---
-// const queueEvents = new QueueEvents("jobs", { connection });
-
-// queueEvents.on("failed", async ({ jobId, failedReason, prev }) => {
-//   const job = await worker.getJob(jobId);
-
-//   if (!job) return;
-
-//   // Check if max attempts reached
-//   if (job.attemptsMade >= job.opts.attempts) {
-//     console.log(`💀 Job ${job.id} exceeded retries. Moving to DLQ`);
-
-//     // move job to DLQ with original data and reason
-//     await dlqQueue.add(job.name, {
-//       originalJobId: job.id,
-//       data: job.data,
-//       failedReason,
-//       failedAt: new Date(),
-//     });
-
-//     // Optional: remove from main queue
-//     await job.remove();
-//   }
-// });
-
 worker.on("completed", (job) => console.log(`✅ Job ${job.id} completed`));
 worker.on("failed", (job, err) =>
   console.log(`❌ Job ${job.id} failed attempt ${job.attemptsMade}: ${err.message}`)
