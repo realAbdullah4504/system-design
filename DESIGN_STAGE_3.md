@@ -1,243 +1,104 @@
-# Job Processing System – Stage 3 (Horizontal Scaling & Real Queue)
+# Job Processing System – Stage 3
 
 ## 📌 Stage 3 Summary
-
-Stage 3 introduces **true distributed job processing**.
-
-The database is no longer used as a logical queue. Instead, a **real queue system** is introduced to safely distribute work across **multiple workers and multiple Node.js processes**.
-
-This stage marks the transition from *"background processing"* to *"horizontally scalable execution"*.
-
-Correctness, ownership, and crash safety are now **enforced by infrastructure**, not conventions.
+Stage 3 implements **horizontal scaling** for the job processing system. Multiple Node.js processes (or workers) handle requests concurrently, and sessions are stored in a **shared Redis store** to ensure consistency across processes. Background jobs can now be processed in parallel, and the system is prepared for higher concurrency and multiple users.
 
 ---
 
 ## 1️⃣ Problem Statement
-
-Stages 1 and 2 (including 2a) relied on:
-
-* Single-process execution
-* Database polling
-* Best-effort ownership semantics
-
-These approaches break down when:
-
-* Multiple Node.js processes exist
-* Multiple workers compete for jobs
-* Duplicate execution becomes harmful
-
-Stage 3 solves this by introducing a **real distributed queue** that provides:
-
-* Deterministic job ownership
-* Safe concurrency
-* Automatic crash recovery
-* Horizontal scalability
+The system must scale horizontally to handle **multiple concurrent users and jobs**.  
+Stage 3 focuses on distributing requests and background jobs across multiple processes, maintaining session consistency, and ensuring jobs can run in parallel without conflicts.
 
 ---
 
 ## 2️⃣ Current Scope
-
-* Multiple Node.js processes (API + workers)
-* Express API (stateless)
-* MongoDB as **system of record** for job metadata and results
-* Redis-backed real queue (execution source of truth)
-* Multiple workers consuming from the same queue
-* No frontend (API-only)
+- Multiple Node.js API processes (clustered or separate servers)
+- Redis used for **shared session storage**
+- Jobs stored in MongoDB (or any preferred DB)
+- Background queue workers process CPU-bound and I/O-bound tasks in parallel
+- Load balancing simulated via cluster or multiple processes
+- Logging enhanced for multiple processes
+- Sessions no longer in-memory; accessible across all workers
 
 ---
 
 ## 3️⃣ Core Concepts
-
-### Queue (New Authority)
-
-* Redis-backed queue (e.g. BullMQ)
-* Responsible for:
-
-  * Job ordering
-  * Job locking / leasing
-  * Retry behavior
-  * Failure handling
-
-### Job (Persistent State)
-
-* Stored in MongoDB
-* Contains:
-
-  * jobId
-  * status
-  * result / error
-  * timestamps
-* DB reflects **what happened**, not *who should run next*
-
-### Worker
-
-* Independent process
-* Subscribes to queue
-* Receives exclusive job ownership from queue
-* Updates MongoDB with execution results
-
-### API
-
-* Stateless
-* Produces jobs into the queue
-* Never executes jobs directly
+- **User** → Can connect to any worker process
+- **Session** → Stored in Redis; shared across all processes
+- **Worker / Process** → Handles incoming requests and background jobs independently
+- **Job** → Unit of work executed by available worker
+- **Status** → Tracks job lifecycle (`CREATED` → `RUNNING` → `FAILED` → `FINISHED`)
+- **Result** → Output of the job (simulated or real)
 
 ---
 
-## 4️⃣ Ownership Model (Critical Change)
-
-| Layer    | Responsibility                |
-| -------- | ----------------------------- |
-| Queue    | Decides **who executes**      |
-| Worker   | Executes job exactly once     |
-| Database | Records lifecycle and outcome |
-
-**The database no longer decides execution order.**
+## 4️⃣ API Endpoints
+- `POST /jobs` → Submit a new job
+- `GET /jobs/:id` → Retrieve job status/result
+- `GET /jobs` → (Optional) List all jobs
+- `POST /login` → Authenticate user and store session in Redis
+- `POST /logout` → Destroy session in Redis
+- `GET /status` → Check which worker handled the request (for testing scaling)
 
 ---
 
-## 5️⃣ Job Lifecycle (Stage 3)
-
-```
-API Request
-   ↓
-MongoDB Job Created (CREATED)
-   ↓
-Job Enqueued (Redis)
-   ↓
-Worker Claims Job (Queue Lock)
-   ↓
-RUNNING
-   ↓ success            ↓ failure
-FINISHED            FAILED
-                      ↓ retry limit
-                   DEAD-LETTER
-```
+## 5️⃣ Implementation Notes
+- Multiple Node.js processes can handle requests concurrently
+- Sessions are stored in Redis to ensure **session consistency**
+- Jobs can now be executed in parallel by different worker processes
+- Job lifecycle updates are visible from any process
+- CPU-bound and I/O-bound simulations continue in background queues
+- Logging tracks worker ID, job status, and session info
+- Load balancing is simulated; real-world deployment may use PM2, Kubernetes, or external load balancers
+- Retry mechanisms and failure handling are **not yet fully implemented** (planned for Stage 4)
 
 ---
 
-## 6️⃣ API Endpoints
-
-* `POST /jobs`
-
-  * Create job in DB
-  * Enqueue job in Redis
-
-* `GET /jobs/:id`
-
-  * Retrieve job status and result
-
-* `GET /jobs`
-
-  * List jobs with filters
-
-(No enqueue endpoint needed — enqueue happens automatically.)
-
----
-
-## 7️⃣ Failure & Recovery Model
-
-### Worker Crash
-
-* Queue lock expires
-* Job is retried automatically
-
-### API Crash
-
-* Job already enqueued remains safe
-
-### Duplicate Execution
-
-* Prevented by queue locks
-
-### Retry Policy
-
-* Limited retries
-* Exponential backoff
-
-### Dead Letter Queue (DLQ)
-
-* Jobs exceeding retry limits are parked
-* Requires manual inspection
-
----
-
-## 8️⃣ Horizontal Scaling Model
-
-### API Scaling
-
-* Multiple stateless API instances
-* Load balanced
-
-### Worker Scaling
-
-* Multiple worker processes
-* All consuming from same queue
-
-### Queue Scaling
-
-* Redis as central coordination layer
-
----
-
-## 9️⃣ Observability (Basic)
-
-* Queue metrics:
-
-  * waiting
-  * active
-  * failed
-  * completed
-* Worker logs include:
-
-  * workerId
-  * jobId
-
----
-
-## 🔟 Stage 3 Postmortem
+## 6️⃣ Stage 3 Postmortem
 
 ### ✅ Works
-
-* Safe parallel execution
-* No duplicate jobs
-* Automatic recovery
-* Horizontal scalability
+- Multiple processes handle requests concurrently
+- Shared session store (Redis) ensures session consistency across processes
+- Background jobs can run in parallel without conflicts
+- API remains responsive while jobs execute in background
+- Worker and job logs track processing accurately
 
 ### ⚠️ Limitations
-
-* Redis is a single dependency
-* No advanced monitoring yet
-* No SLA enforcement
+- Clustered processes still require Redis; Redis availability is critical
+- No full failover strategy yet for crashed workers
+- Load balancing is simulated, not fully production-ready
+- Retry and dead-letter handling still missing
+- Observability is limited; metrics dashboards not yet implemented
 
 ### 🧠 Assumptions
+- Redis is reliable and accessible to all processes
+- Jobs are short and manageable for current worker setup
+- Stage 2 background queue already implemented and functional
+- Sessions need to be shared across processes; no sticky sessions assumed
+- Each worker is independent; communication is via Redis and DB
 
-* Redis availability assumed
-* Jobs are idempotent
-* Moderate traffic
-
-### 🔧 Next Stage Triggers (→ Stage 4)
-
-* Need visibility into latency and failures
-* Need alerting
-* Need performance tuning
-* Need system-wide observability
-
----
-
-## 🎯 Mental Model Shift
-
-**Stage 2**: "My code decides when jobs run"
-
-**Stage 3**: "The system decides who runs jobs"
+### 🔧 Next Stage Triggers
+- Introduce **reliability & observability**:
+  - Monitor worker health and Redis availability
+  - Implement retries for failed jobs
+  - Add logging, metrics, and dashboards
+- Consider multiple physical servers and real load balancing
+- Implement failover for crashed workers
 
 ---
 
-## 🚦 Non-Goals (Explicit)
+## 7️⃣ Metrics / Observations (Optional)
+- CPU usage per worker process
+- Number of jobs processed concurrently across all workers
+- Redis latency for session reads/writes
+- Logs indicate proper job lifecycle tracking across multiple processes
 
-* Kubernetes
-* Auto-scaling
-* Advanced rate limiting
-* Multi-region support
+---
 
-These belong to later stages.
+## 8️⃣ Future Ideas (Stage 4+)
+- Advanced reliability and observability (monitoring dashboards, alerts)
+- Retry mechanisms and dead-letter queue for failed jobs
+- Autoscaling of workers based on CPU/memory thresholds
+- Sticky sessions if needed for certain APIs
+- Kubernetes deployment for full horizontal scaling and failover
+- Session replication or backup for Redis
