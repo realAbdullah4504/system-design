@@ -1,7 +1,6 @@
-const { Worker, QueueEvents } = require("bullmq");
+const { Worker} = require("bullmq");
 const connection = require("./queue/redis");
 const Job = require("./models/Job");
-const dlqQueue = require("./queue/dlq");
 const mongoose = require("mongoose");
 
 mongoose.connect("mongodb://127.0.0.1:27017/jobs");
@@ -34,6 +33,12 @@ const worker = new Worker(
 );
 
 worker.on("completed", (job) => console.log(`✅ Job ${job.id} completed`));
-worker.on("failed", (job, err) =>
-  console.log(`❌ Job ${job.id} failed attempt ${job.attemptsMade}: ${err.message}`)
-);
+worker.on("failed", async (job, err) => {
+  await Job.findByIdAndUpdate(job._id, {
+    status: "Failed",
+    finishedAt: new Date(),
+  });
+  console.log(
+    `❌ Job ${job.id} failed attempt ${job.attemptsMade}: ${err.message}`
+  );
+});
