@@ -1,12 +1,10 @@
-# Job Processing System – Stage 3 (Horizontal Scaling & Real Queue)
+# Job Processing System – Stage 2a (Real Queue & Worker Ownership)
 
-## 📌 Stage 3 Summary
+## 📌 Stage 2a Summary
 
-Stage 3 introduces **true distributed job processing**.
+Stage 2a introduces a **real distributed job queue** while still primarily single-process for API but **with multiple workers consuming from a central queue**.
 
-The database is no longer used as a logical queue. Instead, a **real queue system** is introduced to safely distribute work across **multiple workers and multiple Node.js processes**.
-
-This stage marks the transition from *"background processing"* to *"horizontally scalable execution"*.
+The database is no longer used as a logical queue. Instead, a **Redis-backed queue** becomes the **source of truth for job execution**.
 
 Correctness, ownership, and crash safety are now **enforced by infrastructure**, not conventions.
 
@@ -14,7 +12,7 @@ Correctness, ownership, and crash safety are now **enforced by infrastructure**,
 
 ## 1️⃣ Problem Statement
 
-Stages 1 and 2 (including 2a) relied on:
+Stage 2 relied on:
 
 * Single-process execution
 * Database polling
@@ -22,26 +20,25 @@ Stages 1 and 2 (including 2a) relied on:
 
 These approaches break down when:
 
-* Multiple Node.js processes exist
-* Multiple workers compete for jobs
-* Duplicate execution becomes harmful
+* Multiple workers exist
+* Job duplication is harmful
+* Crash recovery is needed
 
-Stage 3 solves this by introducing a **real distributed queue** that provides:
+Stage 2a solves this by introducing a **real queue system** that provides:
 
 * Deterministic job ownership
 * Safe concurrency
 * Automatic crash recovery
-* Horizontal scalability
+* Prepares system for horizontal scaling in Stage 3
 
 ---
 
 ## 2️⃣ Current Scope
 
-* Multiple Node.js processes (API + workers)
-* Express API (stateless)
+* Single API process (stateless)
+* Multiple worker processes consuming from Redis
 * MongoDB as **system of record** for job metadata and results
-* Redis-backed real queue (execution source of truth)
-* Multiple workers consuming from the same queue
+* Redis-backed queue (execution source of truth)
 * No frontend (API-only)
 
 ---
@@ -96,42 +93,32 @@ Stage 3 solves this by introducing a **real distributed queue** that provides:
 
 ---
 
-## 5️⃣ Job Lifecycle (Stage 3)
+## 5️⃣ Job Lifecycle (Stage 2a)
 
-```
 API Request
-   ↓
+↓
 MongoDB Job Created (CREATED)
-   ↓
+↓
 Job Enqueued (Redis)
-   ↓
+↓
 Worker Claims Job (Queue Lock)
-   ↓
+↓
 RUNNING
-   ↓ success            ↓ failure
-FINISHED            FAILED
-                      ↓ retry limit
-                   DEAD-LETTER
-```
+↓ success ↓ failure
+FINISHED FAILED
+↓ retry limit
+DEAD-LETTER
+
 
 ---
 
 ## 6️⃣ API Endpoints
 
-* `POST /jobs`
+* `POST /jobs` – Create job in DB and enqueue in Redis  
+* `GET /jobs/:id` – Retrieve job status and result  
+* `GET /jobs` – List jobs with filters  
 
-  * Create job in DB
-  * Enqueue job in Redis
-
-* `GET /jobs/:id`
-
-  * Retrieve job status and result
-
-* `GET /jobs`
-
-  * List jobs with filters
-
-(No enqueue endpoint needed — enqueue happens automatically.)
+(Enqueue endpoint happens automatically.)
 
 ---
 
@@ -162,25 +149,7 @@ FINISHED            FAILED
 
 ---
 
-## 8️⃣ Horizontal Scaling Model
-
-### API Scaling
-
-* Multiple stateless API instances
-* Load balanced
-
-### Worker Scaling
-
-* Multiple worker processes
-* All consuming from same queue
-
-### Queue Scaling
-
-* Redis as central coordination layer
-
----
-
-## 9️⃣ Observability (Basic)
+## 8️⃣ Observability (Basic)
 
 * Queue metrics:
 
@@ -188,6 +157,7 @@ FINISHED            FAILED
   * active
   * failed
   * completed
+
 * Worker logs include:
 
   * workerId
@@ -195,20 +165,21 @@ FINISHED            FAILED
 
 ---
 
-## 🔟 Stage 3 Postmortem
+## 🔟 Stage 2a Postmortem
 
 ### ✅ Works
 
-* Safe parallel execution
+* Safe parallel execution by multiple workers
 * No duplicate jobs
 * Automatic recovery
-* Horizontal scalability
+* Prepares system for horizontal scaling
 
 ### ⚠️ Limitations
 
 * Redis is a single dependency
-* No advanced monitoring yet
-* No SLA enforcement
+* No API scaling yet
+* No advanced monitoring
+* Single API process (no real horizontal scaling)
 
 ### 🧠 Assumptions
 
@@ -216,20 +187,19 @@ FINISHED            FAILED
 * Jobs are idempotent
 * Moderate traffic
 
-### 🔧 Next Stage Triggers (→ Stage 4)
+### 🔧 Next Stage Triggers (→ Stage 3)
 
-* Need visibility into latency and failures
-* Need alerting
-* Need performance tuning
-* Need system-wide observability
+* Introduce multiple API processes / servers
+* Add shared session store
+* Full horizontal scaling
 
 ---
 
 ## 🎯 Mental Model Shift
 
-**Stage 2**: "My code decides when jobs run"
+**Stage 2**: "My code decides when jobs run"  
 
-**Stage 3**: "The system decides who runs jobs"
+**Stage 2a**: "The system (queue) decides who runs jobs"  
 
 ---
 
