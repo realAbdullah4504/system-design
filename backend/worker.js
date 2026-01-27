@@ -30,8 +30,6 @@ const worker = new Worker(
   {
     connection,
     lockDuration: 15000,
-    attempts: 3, // retry max 3 times
-    backoff: { type: "exponential", delay: 2000 },
   }
 );
 
