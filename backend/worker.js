@@ -1,78 +1,35 @@
+const { Worker } = require("bullmq");
+const connection = require("./queue/redis");
 const Job = require("./models/Job");
+const mongoose = require("mongoose");
 
-const WORKER_INTERVAL_MS = 1000;
+mongoose.connect("mongodb://127.0.0.1:27017/jobs");
 
+const worker = new Worker(
+  "jobs",
+  async (job) => {
+    const { jobId } = job.data;
 
-async function recoverStuckJobs() {
-  console.log("🧹 Running startup recovery...");
+    await Job.findByIdAndUpdate(jobId, {
+      status: "RUNNING",
+      startedAt: new Date(),
+    });
 
-  const result = await Job.updateMany(
-    { status: "RUNNING" },
-    {
-      status: "QUEUED",
-      startedAt: null
-    }
-  );
+    // simulate work
+    await new Promise((r) => setTimeout(r, 3000));
 
-  console.log(
-    `🔁 Recovered ${result.modifiedCount} stuck RUNNING jobs`
-  );
-}
+    await Job.findByIdAndUpdate(jobId, {
+      status: "FINISHED",
+      finishedAt: new Date(),
+    });
+  },
+  { connection }
+);
 
-async function processJob(job) {
-  console.log(`🛠️ Processing job ${job.id}`);
+worker.on("completed", (job) => {
+  console.log(`Job ${job.id} completed`);
+});
 
-  // simulate slow work
-  await new Promise((res) => setTimeout(res, 3000));
-
-  // simulate occasional failure
-  if (Math.random() < 0.2) {
-    throw new Error("Random job failure");
-  }
-
-  return `Job ${job.id} completed successfully`;
-}
-
-async function workerLoop() {
-  try {
-    const job = await Job.findOneAndUpdate(
-      { status: "QUEUED" },
-      {
-        status: "RUNNING",
-        startedAt: new Date()
-      },
-      { new: true }
-    );
-
-    if (!job) {
-      return;
-    }
-
-    try {
-      const result = await processJob(job);
-
-      job.status = "FINISHED";
-      job.result = result;
-      job.finishedAt = new Date();
-      await job.save();
-
-      console.log(`✅ Job finished ${job.id}`);
-    } catch (err) {
-      job.status = "FAILED";
-      job.error = err.message;
-      job.finishedAt = new Date();
-      await job.save();
-
-      console.error(`❌ Job failed ${job.id}`, err.message);
-    }
-  } catch (err) {
-    console.error("Worker loop error:", err);
-  }
-}
-
-function startWorker() {
-  console.log("👷 Worker started");
-  setInterval(workerLoop, WORKER_INTERVAL_MS);
-}
-
-module.exports = { startWorker,recoverStuckJobs };
+worker.on("failed", (job, err) => {
+  console.error(`Job ${job?.id} failed`, err);
+});
