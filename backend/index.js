@@ -18,6 +18,12 @@ app.post("/jobs", async (req, res) => {
 
     await jobQueue.add("process-job", {
       jobId: job._id.toString(),
+    }, {
+      attempts: 3,
+      backoff: {
+        type: "exponential",
+        delay: 2000,
+      },
     });
 
     res.status(202).json({ jobId: job._id });

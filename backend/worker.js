@@ -17,7 +17,7 @@ const worker = new Worker(
     });
 
     // simulate work
-    // if (Math.random() < 0.7) throw new Error("Intentional failure for testing");
+    if (Math.random() < 0.7) throw new Error("Intentional failure for testing");
 
     await new Promise((r) => setTimeout(r, 5000));
 

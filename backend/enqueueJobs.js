@@ -1,7 +1,7 @@
 const axios = require("axios");
 
 const API_BASE = "http://localhost:3000";
-const TOTAL_JOBS = 100;
+const TOTAL_JOBS = 10;
 
 async function enqueueJobs() {
   for (let i = 1; i <= TOTAL_JOBS; i++) {
