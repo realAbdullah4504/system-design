@@ -10,16 +10,21 @@ mongoose.connect("mongodb://127.0.0.1:27017/jobs");
 
 app.post("/jobs", async (req, res) => {
   const { name } = req.body;
-  const job = await Job.create({
-    name,
-    status: "CREATED",
-  });
+  try {
+    const job = await Job.create({
+      name,
+      status: "CREATED",
+    });
 
-  await jobQueue.add("process-job", {
-    jobId: job._id.toString(),
-  });
+    await jobQueue.add("process-job", {
+      jobId: job._id.toString(),
+    });
 
-  res.status(202).json({ jobId: job._id });
+    res.status(202).json({ jobId: job._id });
+  } catch (error) {
+    console.error("Error creating job:", error);
+    res.status(500).json({ error: "Failed to create job" });
+  }
 });
 
 app.listen(3000, () => {
