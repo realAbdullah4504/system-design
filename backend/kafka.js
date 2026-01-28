@@ -1,14 +1,9 @@
 const { Kafka } = require("kafkajs");
 
-const brokers = process.env.KAFKA_BROKERS
-  ? process.env.KAFKA_BROKERS.split(",").map((b) => b.trim()).filter(Boolean)
-  : ["localhost:9092"];
-
-const clientId = process.env.KAFKA_CLIENT_ID || "jobs-service";
-
+// Force localhost connection for local development
 const kafka = new Kafka({
-  clientId,
-  brokers,
+  clientId: "jobs-service",
+  brokers: ["localhost:29092"],
 });
 
-module.exports = { kafka };
+module.exports = kafka;
