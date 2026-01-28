@@ -6,8 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon index.js",
-    "worker": "node worker.js",
-    "notify": "node notificationService.js"
+    "worker": "nodemon worker.js",
+    "notify": "nodemon notificationService.js"
   },
   "keywords": [],
   "author": "",

@@ -1,13 +1,15 @@
 # Job Processing System – Stage 2b: Fanout & Kafka Experimentation
 
 ## 📌 Stage 2b Summary
-Stage 2b introduces **fanout design** using a message broker (Kafka) to allow **parallel processing of jobs by multiple workers**. This stage builds on Stage 2’s background queue setup and focuses on **message-driven architecture**, enabling tasks to be broadcast to multiple consumers (fanout) and supporting future horizontal scaling.
+Stage 2b introduces **fanout design** using a message broker (Kafka) to allow **parallel processing of jobs by multiple workers**.  
+This stage builds on Stage 2’s background queue setup and focuses on **message-driven architecture**, enabling tasks to be broadcast to multiple consumers (fanout) and supporting future horizontal scaling.
 
 ---
 
 ## 1️⃣ Problem Statement
 The system needs to handle **jobs that can be processed in parallel by multiple workers**.  
-Stage 2b explores **fanout patterns** to broadcast jobs to multiple workers using Kafka, allowing multiple consumers to process different tasks or replicate work if needed.
+Stage 2b explores **fanout patterns** to broadcast jobs to multiple workers using Kafka, allowing multiple consumers to process different tasks or replicate work if needed.  
+Additionally, this stage introduces **Kafka partitions, keys, and offsets** to control **parallelism, ordering, and reliable message processing**.
 
 ---
 
@@ -19,21 +21,30 @@ Stage 2b explores **fanout patterns** to broadcast jobs to multiple workers usin
 - Single Node.js API process publishes jobs (horizontal scaling not yet implemented)
 - Session management still in-memory (shared sessions added later in Stage 3)
 - Logging of produced and consumed messages for testing and observation
+- Simple partitioning strategy: **jobId as key** to assign partitions
 
 ---
 
 ## 3️⃣ Core Concepts
-- **Producer** → Publishes jobs/events to Kafka topics
-- **Consumer** → Subscribes to topics and processes jobs
-- **Topic** → Logical channel for a type of job or task
-- **Fanout** → Multiple consumers can receive the same message or different partitions of work
-- **Job** → Unit of work, may be CPU-bound or I/O-bound
-- **Status** → Job lifecycle tracked in DB (`CREATED` → `RUNNING` → `FAILED` → `FINISHED`)
+
+| Concept       | Description                                                                 |
+|---------------|-----------------------------------------------------------------------------|
+| **Producer**  | Publishes jobs/events to Kafka topics                                        |
+| **Consumer**  | Subscribes to topics and processes jobs asynchronously                       |
+| **Topic**     | Logical channel for a type of job or task                                    |
+| **Partition** | Sub-log inside a topic; messages in a partition are ordered; defines parallelism |
+| **Key**       | Determines partition assignment for each message (hash(key) % partitions)    |
+| **Fanout**    | Multiple consumer groups can consume the same topic independently           |
+| **Job**       | Unit of work, may be CPU-bound or I/O-bound                                  |
+| **Status**    | Job lifecycle tracked in DB (`CREATED` → `RUNNING` → `FAILED` → `FINISHED`) |
+| **Offset**    | Position of a message in a partition; controls where consumers resume        |
+| **Idempotency** | Required to safely handle redelivered messages and at-least-once delivery  |
+
 
 ---
 
 ## 4️⃣ API Endpoints
-- `POST /jobs` → Submit a new job (publishes to Kafka topic)
+- `POST /jobs` → Submit a new job (publishes to Kafka topic with key)
 - `GET /jobs/:id` → Retrieve job status/result
 - `GET /jobs` → (Optional) List all jobs
 - `POST /login` → Authenticate user (in-memory session for Stage 2b)
@@ -43,25 +54,33 @@ Stage 2b explores **fanout patterns** to broadcast jobs to multiple workers usin
 
 ## 5️⃣ Implementation Notes
 - Jobs are **produced** to Kafka topics instead of directly adding to a local queue
-- Consumers pull jobs asynchronously from Kafka and execute them
-- Fanout design allows:
-  - Multiple consumers processing jobs from the same topic
-  - Broadcasting tasks to several workers if needed
-- Logging tracks:
+- **Keys** (e.g., jobId) are used to assign partitions → controls ordering and load distribution
+- **Consumers pull jobs asynchronously from partitions** and execute them
+- **Fanout design** allows:
+  - Multiple consumers processing jobs from the same topic independently
+  - Broadcasting tasks to several worker services (e.g., analytics, notifications)
+- **Parallelism is limited by the number of partitions**:
+  - Max active jobs in parallel = number of partitions per topic per consumer group
+  - Multiple jobs in the same partition are processed sequentially
+- **Offset management**:
+  - Each partition has its own offset
+  - Auto-commit vs manual commit determines whether unprocessed jobs are redelivered
+- **Logging tracks**:
   - Which consumer processed which job
   - Job lifecycle updates
-- CPU-bound and I/O-bound tasks continue to be simulated
-- Single Node.js API process publishes jobs; scaling to multiple producers happens in Stage 3
-- Observability is limited; focus is on learning Kafka and fanout behavior
+- **CPU-bound and I/O-bound tasks continue to be simulated**
+- **Single Node.js API process publishes jobs; scaling to multiple producers happens in Stage 3**
+- **Observability is limited; focus is on learning Kafka, fanout, partitions, keys, and offsets**
 
 ---
 
 ## 6️⃣ Stage 2b Postmortem
 
 ### ✅ Works
-- Jobs successfully produced to Kafka topics
+- Jobs successfully produced to Kafka topics with keys
 - Consumers pick up jobs and update lifecycle in DB
 - Fanout pattern demonstrates multiple workers can process same or partitioned jobs
+- Max parallelism = number of partitions per topic per consumer group
 - API remains responsive while consumers process jobs asynchronously
 
 ### ⚠️ Limitations
@@ -69,25 +88,29 @@ Stage 2b explores **fanout patterns** to broadcast jobs to multiple workers usin
 - In-memory sessions; not shared across processes
 - Limited monitoring and metrics
 - Retries, dead-letter queues, and exact-once processing not implemented yet
+- Ordering is **guaranteed only within partitions**, not across partitions
 
 ### 🧠 Assumptions
 - Kafka broker is running locally or in simple dev cluster
 - Workers are single-process Node.js consumers
 - Jobs are short (<5 seconds) for testing fanout
+- Each job has a unique key (jobId) → partition assignment controlled by hash
 - Focus is **educational / experimental**, not production-ready
 
 ### 🔧 Next Stage Triggers
 - Stage 3: integrate Kafka with **multiple Node.js processes** for horizontal scaling
 - Implement retries, dead-letter queues, and monitoring
 - Use shared sessions (Redis) for multi-process consistency
+- Increase partitions if parallelism becomes a bottleneck
 
 ---
 
 ## 7️⃣ Metrics / Observations (Optional)
 - Time from producing a job to consumption
-- Number of consumers processing jobs concurrently
+- Number of consumers processing jobs concurrently vs partitions
 - Job lifecycle tracking in DB
 - Logging shows which consumer handled which job
+- Observed duplicate processing when offsets are not committed manually
 
 ---
 
