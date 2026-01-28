@@ -14,24 +14,50 @@ async function start() {
   await consumer.subscribe({ topic: "jobs" });
 
   await consumer.run({
-    eachMessage: async ({ message }) => {
+    autoCommit: false, // ✅ Disable auto commit
+    eachMessage: async ({ topic, partition, message }) => {
       const data = JSON.parse(message.value.toString());
+      const jobId = data.jobId;
 
-      console.log(`[${WORKER_NAME}] processing job`, data.jobId);
+      console.log(`[${WORKER_NAME}] START processing job`, jobId);
 
-      await Job.findByIdAndUpdate(data.jobId, {
+      // 🔹 Idempotent check: skip if already finished
+      const existingJob = await Job.findById(jobId);
+      if (!existingJob || existingJob.status === "FINISHED") {
+        console.log(`[${WORKER_NAME}] Job already finished, skipping`, jobId);
+        // commit offset anyway to advance
+        await consumer.commitOffsets([
+          { topic, partition, offset: (Number(message.offset) + 1).toString() }
+        ]);
+        return;
+      }
+
+      // Update status to RUNNING
+      await Job.findByIdAndUpdate(jobId, {
         status: "RUNNING",
         processedBy: WORKER_NAME,
       });
 
-      // simulate work
+      // Simulate work (2s)
       await new Promise((r) => setTimeout(r, 2000));
 
-      await Job.findByIdAndUpdate(data.jobId, {
+      // 🔹 Simulate crash randomly (to see effect)
+      if (Math.random() < 0.3) {
+        console.log(`[${WORKER_NAME}] SIMULATED CRASH BEFORE COMMIT`);
+        process.exit(1);
+      }
+
+      // Mark job as FINISHED
+      await Job.findByIdAndUpdate(jobId, {
         status: "FINISHED",
       });
 
-      console.log(`[${WORKER_NAME}] finished job`, data.jobId);
+      console.log(`[${WORKER_NAME}] FINISHED job`, jobId);
+
+      // ✅ Commit offset manually AFTER work
+      await consumer.commitOffsets([
+        { topic, partition, offset: (Number(message.offset) + 1).toString() }
+      ]);
     },
   });
 }
