@@ -5,19 +5,16 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon index.js",
-    "bull-board": "node bull.js"
+    "start": "nodemon index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@bull-board/express": "^6.16.4",
     "axios": "^1.13.3",
-    "bullmq": "^5.67.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "ioredis": "^5.9.2",
+    "kafkajs": "^2.2.4",
     "mongoose": "^9.1.5",
     "uuid": "^13.0.0"
   }
