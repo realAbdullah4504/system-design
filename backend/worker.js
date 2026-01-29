@@ -42,9 +42,10 @@ async function start() {
       await new Promise((r) => setTimeout(r, 2000));
 
       // 🔹 Simulate crash randomly (to see effect)
-      if (Math.random() < 0.3) {
+      if (Math.random() < 0.9) {
         console.log(`[${WORKER_NAME}] SIMULATED CRASH BEFORE COMMIT`);
-        process.exit(1);
+        throw new Error("Simulated crash");
+        // process.exit(1);
       }
 
       // Mark job as FINISHED
