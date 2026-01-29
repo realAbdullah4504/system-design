@@ -1,23 +1,21 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const Job = require("./models/Job");
-const { startProducer, publishJob } = require("./producer");
-const { startDLQProducer } = require("./dlqProducer");
+const { startAllProducers, publishMainJob } = require("./producers");
 
 const app = express();
 app.use(express.json());
 
 mongoose.connect("mongodb://127.0.0.1:27017/jobs");
 
-startProducer();
-startDLQProducer();
+startAllProducers();
 
 app.post("/jobs", async (req, res) => {
   const job = await Job.create({
     name: req.body.name,
   });
 
-  await publishJob(job);
+  await publishMainJob(job);
 
   res.json({ jobId: job._id });
 });
