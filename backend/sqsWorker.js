@@ -2,6 +2,7 @@
 import { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } from "@aws-sdk/client-sqs";
 import dotenv from "dotenv";
 import Job from "./models/Job.js";
+import mongoose from "mongoose";
 
 dotenv.config();
 
@@ -10,6 +11,9 @@ const QUEUE_URL = process.env.SQS_QUEUE_URL;
 
 // Create SQS client
 const sqs = new SQSClient({ region: REGION });
+mongoose.connect("mongodb://127.0.0.1:27017/jobs")
+  .then(() => console.log("Connected to MongoDB"))
+  .catch(err => console.error("MongoDB connection error:", err));
 
 // Simulate processing delay
 function sleep(ms) {
@@ -26,7 +30,7 @@ async function processMessage(message) {
     await sleep(2000);
 
     // Random failure simulation
-    if (Math.random() < 0.2) throw new Error("Simulated failure");
+    if (Math.random() < 0.8) throw new Error("Simulated failure");
 
     console.log(`[Worker] Job ${job.jobId} finished successfully.`);
 
