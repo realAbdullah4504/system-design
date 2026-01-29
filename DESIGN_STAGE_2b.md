@@ -22,6 +22,10 @@ Additionally, this stage introduces **Kafka partitions, keys, and offsets** to c
 - Session management still in-memory (shared sessions added later in Stage 3)
 - Logging of produced and consumed messages for testing and observation
 - Simple partitioning strategy: **jobId as key** to assign partitions
+- **Retry mechanism** with configurable max retries and backoff strategies
+- **Dead-Letter Queue (DLQ)** for jobs that exceed retry limits
+- **Multi-service architecture** with notification service as fanout example
+- **Idempotent processing** to handle duplicate messages safely
 
 ---
 
@@ -39,6 +43,9 @@ Additionally, this stage introduces **Kafka partitions, keys, and offsets** to c
 | **Status**    | Job lifecycle tracked in DB (`CREATED` → `RUNNING` → `FAILED` → `FINISHED`) |
 | **Offset**    | Position of a message in a partition; controls where consumers resume        |
 | **Idempotency** | Required to safely handle redelivered messages and at-least-once delivery  |
+| **Retry** | Automatic reprocessing of failed jobs with exponential backoff  |
+| **DLQ** | Dead-Letter Queue for permanently failed jobs after max retries  |
+| **Multi-Service** | Multiple independent services consuming from same topic (fanout)  |
 
 
 ---
@@ -70,6 +77,16 @@ Additionally, this stage introduces **Kafka partitions, keys, and offsets** to c
   - Job lifecycle updates
 - **CPU-bound and I/O-bound tasks continue to be simulated**
 - **Single Node.js API process publishes jobs; scaling to multiple producers happens in Stage 3**
+- **Retry mechanism implemented**:
+  - Configurable `MAX_RETRIES` (default: 3)
+  - Retry topics with delays: `jobs.retry.5s`, `jobs.retry.30s`
+  - Exponential backoff through topic selection
+- **DLQ functionality implemented**:
+  - Failed jobs sent to `jobs.DLQ` topic after max retries
+  - DLQ messages include error details, retry count, and failure timestamp
+- **Multi-service fanout implemented**:
+  - Notification service consumes from `jobs` topic independently
+  - Demonstrates broadcasting pattern for multiple services
 - **Observability is limited; focus is on learning Kafka, fanout, partitions, keys, and offsets**
 
 ---
@@ -82,12 +99,18 @@ Additionally, this stage introduces **Kafka partitions, keys, and offsets** to c
 - Fanout pattern demonstrates multiple workers can process same or partitioned jobs
 - Max parallelism = number of partitions per topic per consumer group
 - API remains responsive while consumers process jobs asynchronously
+- **Retry mechanism** successfully reprocesses failed jobs with backoff
+- **DLQ** captures permanently failed jobs for manual inspection
+- **Multi-service architecture** enables notification service to consume independently
+- **Idempotent processing** prevents duplicate job execution
 
 ### ⚠️ Limitations
 - Single API process only (no horizontal scaling yet)
 - In-memory sessions; not shared across processes
 - Limited monitoring and metrics
-- Retries, dead-letter queues, and exact-once processing not implemented yet
+- **Retry configuration is basic** (fixed backoff intervals)
+- **DLQ monitoring requires manual inspection**
+- **No circuit breaker pattern** for cascading failures
 - Ordering is **guaranteed only within partitions**, not across partitions
 
 ### 🧠 Assumptions
@@ -99,7 +122,9 @@ Additionally, this stage introduces **Kafka partitions, keys, and offsets** to c
 
 ### 🔧 Next Stage Triggers
 - Stage 3: integrate Kafka with **multiple Node.js processes** for horizontal scaling
-- Implement retries, dead-letter queues, and monitoring
+- **Enhance retry mechanisms** with configurable exponential backoff and jitter
+- **Implement DLQ monitoring** and automated alerting
+- **Add circuit breaker pattern** for fault tolerance
 - Use shared sessions (Redis) for multi-process consistency
 - Increase partitions if parallelism becomes a bottleneck
 
@@ -111,6 +136,9 @@ Additionally, this stage introduces **Kafka partitions, keys, and offsets** to c
 - Job lifecycle tracking in DB
 - Logging shows which consumer handled which job
 - Observed duplicate processing when offsets are not committed manually
+- **Retry metrics**: number of retries per job, retry success rate
+- **DLQ metrics**: number of jobs in DLQ, failure patterns
+- **Multi-service metrics**: notification service processing time
 
 ---
 
@@ -121,3 +149,8 @@ Additionally, this stage introduces **Kafka partitions, keys, and offsets** to c
 - Observability: metrics, dashboards, alerts
 - Integration with Redis sessions and failure recovery
 - Sticky sessions or advanced routing for jobs if required
+- **Advanced retry patterns**: exponential backoff with jitter, custom retry policies
+- **DLQ automation**: automated replay, monitoring dashboards, alerting
+- **Service mesh integration** for multi-service communication patterns
+- **Circuit breaker implementation** for fault tolerance
+- **Distributed tracing** across multi-service job processing
