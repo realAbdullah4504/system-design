@@ -6,15 +6,17 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon index.js",
-    "worker": "nodemon worker.js",
-    "notify": "nodemon notificationService.js"
+    "queue:worker": "nodemon workers/queueWorker.js",
+    "dlq:worker": "nodemon workers/dlqWorker.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-sqs": "^3.980.0",
     "axios": "^1.13.3",
     "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "kafkajs": "^2.2.4",
     "mongoose": "^9.1.5",
