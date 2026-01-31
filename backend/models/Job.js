@@ -15,11 +15,15 @@ const jobSchema = new mongoose.Schema(
 
     result: { type: String },
     error: { type: String },
+    messageId: { type: String, index: true }, // For idempotency
 
     startedAt: { type: Date },
     finishedAt: { type: Date }
   },
   { timestamps: true }
 );
+
+// Compound index for idempotency
+jobSchema.index({ messageId: 1 }, { unique: true });
 
 module.exports = mongoose.model("Job", jobSchema);
