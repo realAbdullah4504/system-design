@@ -30,33 +30,34 @@ function sleep(ms) {
 async function processMessage(message) {
   try {
     const job = JSON.parse(message.Body);
-    console.log(`[Worker] Processing job ${job.jobId}, task: ${job.name || job.task}`);
 
-    // Simulate work (2 seconds)
+    const receiveCount = Number(
+      message.Attributes?.ApproximateReceiveCount || 1
+    );
+
+    console.log(
+      `[Worker] Processing job ${job.jobId}, attempt #${receiveCount}`
+    );
+
     await sleep(2000);
 
-    // Random failure simulation
     if (Math.random() < 0.8) throw new Error("Simulated failure");
 
     console.log(`[Worker] Job ${job.jobId} finished successfully.`);
 
-    // Update job status in MongoDB
     await Job.findByIdAndUpdate(job.jobId, { status: "FINISHED" });
 
-    // Delete message from queue after successful processing
     await sqs.send(new DeleteMessageCommand({
       QueueUrl: QUEUE_URL,
       ReceiptHandle: message.ReceiptHandle
     }));
+
   } catch (error) {
-    if (error instanceof SyntaxError) {
-      console.error(`[Worker] Invalid JSON in message: ${message.Body}`);
-    } else {
-      console.error(`[Worker] Error processing job:`, error.message);
-    }
-    // Do NOT delete message → SQS will retry automatically after visibility timeout
+    console.error(`[Worker] Error processing job:`, error.message);
+    // Do NOT delete → retry
   }
 }
+
 
 // Polling loop
 async function pollQueue() {
@@ -66,7 +67,8 @@ async function pollQueue() {
         QueueUrl: QUEUE_URL,
         MaxNumberOfMessages: 5,      // batch of messages
         WaitTimeSeconds: 10,         // long polling
-        VisibilityTimeout: 20        // time to process message before it becomes visible again
+        VisibilityTimeout: 20,        // time to process message before it becomes visible again
+        AttributeNames: ["ApproximateReceiveCount"]
       }));
 
       if (data.Messages) {
