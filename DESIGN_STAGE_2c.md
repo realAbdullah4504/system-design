@@ -1,14 +1,14 @@
-# Job Processing System – Stage 2b: Fanout & SNS/SQS Experimentation
+# Job Processing System – Stage 2c: Fanout & SNS/SQS Experimentation
 
-## 📌 Stage 2b Summary
-Stage 2b introduces **fanout design** using AWS messaging services (SNS/SQS) to allow **parallel processing of jobs by multiple workers**.  
+## 📌 Stage 2c Summary
+Stage 2c introduces **fanout design** using AWS messaging services (SNS/SQS) to allow **parallel processing of jobs by multiple workers**.  
 This stage builds on Stage 2's background queue setup and focuses on **message-driven architecture**, enabling tasks to be broadcast to multiple consumers (fanout) and supporting future horizontal scaling.
 
 ---
 
 ## 1️⃣ Problem Statement
 The system needs to handle **jobs that can be processed in parallel by multiple workers**.  
-Stage 2b explores **fanout patterns** to broadcast jobs to multiple workers using AWS SNS/SQS, allowing multiple consumers to process different tasks or replicate work if needed.  
+Stage 2c explores **fanout patterns** to broadcast jobs to multiple workers using AWS SNS/SQS, allowing multiple consumers to process different tasks or replicate work if needed.  
 Additionally, this stage introduces **SNS topics, SQS queues, and message visibility timeouts** to control **parallelism, ordering, and reliable message processing**.
 
 ---
@@ -55,7 +55,7 @@ Additionally, this stage introduces **SNS topics, SQS queues, and message visibi
 - `POST /jobs` → Submit a new job (publishes to SNS topic)
 - `GET /jobs/:id` → Retrieve job status/result
 - `GET /jobs` → (Optional) List all jobs
-- `POST /login` → Authenticate user (in-memory session for Stage 2b)
+- `POST /login` → Authenticate user (in-memory session for Stage 2c)
 - `POST /logout` → Destroy session
 
 ---
@@ -95,7 +95,7 @@ Additionally, this stage introduces **SNS topics, SQS queues, and message visibi
 
 ---
 
-## 6️⃣ Stage 2b Postmortem
+## 6️⃣ Stage 2c Postmortem
 
 ### ✅ Works
 - Jobs successfully published to SNS topic and distributed to SQS queues
