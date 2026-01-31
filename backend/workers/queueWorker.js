@@ -5,9 +5,12 @@ import { QUEUE_URL } from "../config/sqs.js";
 
 // Worker function
 async function processMessage(message) {
+  let job = null;
+  let receiveCount = 0;
+  
   try {
-    const job = JSON.parse(message.Body);
-    const receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
+    job = JSON.parse(message.Body);
+    receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
 
     console.log(`[Worker] Processing job ${job.jobId}, attempt #${receiveCount}`);
 
@@ -23,17 +26,7 @@ async function processMessage(message) {
 
   } catch (error) {
     console.error(`[Worker] Error processing job:`, error.message);
-    
-    const receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
-    
-    if (receiveCount >= 3) {
-      console.log(`[Worker] Job ${job.jobId} exceeded max retries, updating status to FAILED`);
-      await updateJobStatus(job.jobId, { 
-        status: "FAILED",
-        error: error.message,
-        finishedAt: new Date()
-      });
-    }
+    // Do NOT delete → SQS will handle DLQ routing after 3rd attempt
   }
 }
 
