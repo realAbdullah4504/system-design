@@ -5,8 +5,6 @@ export const sendMessage = async (messageBody) => {
   const command = new SendMessageCommand({
     QueueUrl: QUEUE_URL,
     MessageBody: JSON.stringify(messageBody),
-    MessageDeduplicationId: messageBody.jobId, // For idempotency (if using FIFO queue)
-    MessageGroupId: messageBody.jobId, // For FIFO queue ordering
   });
   
   return await sqsClient.send(command);
