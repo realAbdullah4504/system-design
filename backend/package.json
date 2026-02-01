@@ -7,12 +7,14 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon index.js",
     "queue:worker": "nodemon workers/queueWorker.js",
-    "dlq:worker": "nodemon workers/dlqWorker.js"
+    "dlq:worker": "nodemon workers/dlqWorker.js",
+    "notification:worker": "nodemon workers/notificationWorker.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-sns": "^3.980.0",
     "@aws-sdk/client-sqs": "^3.980.0",
     "axios": "^1.13.3",
     "cors": "^2.8.6",

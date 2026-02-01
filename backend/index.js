@@ -3,6 +3,7 @@ import { connectDB } from "./config/database.js";
 import jobRoutes from "./routes/jobRoutes.js";
 import { pollQueue } from "./workers/queueWorker.js";
 import { pollDLQ } from "./workers/dlqWorker.js";
+import { pollNotification } from "./workers/notificationWorker.js";
 
 const app = express();
 app.use(express.json());
@@ -18,4 +19,5 @@ app.listen(3000, () => {
   console.log("Starting workers...");
   pollQueue();
   pollDLQ();
+  pollNotification();
 });
