@@ -22,6 +22,15 @@ aws sqs set-queue-attributes \
       "RedrivePolicy":"{\"maxReceiveCount\":\"3\", \"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:123456789012:notification-dlq\"}"
   }'
 
+aws sns subscribe \
+  --topic-arn arn:aws:sns:us-east-1:588738579221:job-events-topic \
+  --protocol sqs \
+  --notification-endpoint arn:aws:sqs:us-east-1:588738579221:notification-queue
+
+aws sqs set-queue-attributes \
+  --queue-url https://sqs.us-east-1:588738579221/notification-queue \
+  --attributes '{"Policy":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":\"sqs:SendMessage\",\"Resource\":\"arn:aws:sqs:us-east-1:588738579221:notification-queue\",\"Condition\":{\"ArnEquals\":{\"aws:SourceArn\":\"arn:aws:sns:us-east-1:588738579221:job-events-topic\"}}}]}"}'
+
 ```
 
 ## Folder Structure

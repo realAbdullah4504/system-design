@@ -1,5 +1,5 @@
 import { createJob, getJobById } from "../services/jobService.js";
-import { sendNotification } from "../services/sqsService.js";
+import { publishJobEvent } from "../services/snsService.js";
 
 export const createJobController = async (req, res) => {
   try {
@@ -12,9 +12,14 @@ export const createJobController = async (req, res) => {
       createdAt: new Date().toISOString(),
     };
 
-    // const result = await sendMessage(message);
-    const result = await sendNotification(message);
-    console.log(`[Producer] Sent job ${job._id} to SQS, MessageId: ${result.MessageId}`);
+    await publishJobEvent(message);
+
+    console.log(`[Producer] Sent job ${job._id} to SNS`);
+
+    // const resultMessage = await sendMessage(message);  
+    // const resultNotification = await sendNotification(message);
+    // console.log(`[Producer] Sent job ${job._id} to SQS, MessageId: ${resultMessage.MessageId}`);
+    // console.log(`[Producer] Sent job ${job._id} to SQS, MessageId: ${resultNotification.MessageId}`);
 
     res.json({ jobId: job._id });
   } catch (err) {

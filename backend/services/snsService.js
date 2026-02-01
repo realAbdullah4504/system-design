@@ -1,7 +1,7 @@
 import { PublishCommand } from "@aws-sdk/client-sns";
 import { snsClient, TOPIC_ARN } from "../config/sns.js";
 
-export const publishMessage = async (message) => {
+export const publishJobEvent = async (message) => {
     try {
         const command = new PublishCommand({
             TopicArn: TOPIC_ARN,
