@@ -1,5 +1,29 @@
 # Backend System Design
 
+## aws commands
+
+```
+aws sns create-topic \
+    --name job-events-topic
+
+aws sqs create-queue \
+  --queue-name notification-queue
+
+aws sqs create-queue \
+  --queue-name notification-dlq
+
+aws sqs get-queue-attributes \
+  --queue-url https://sqs.us-east-1.amazonaws.com/123456789012/notification-dlq \
+  --attribute-names QueueArn
+
+aws sqs set-queue-attributes \
+  --queue-url https://sqs.us-east-1.amazonaws.com/123456789012/notification-queue \
+  --attributes '{
+      "RedrivePolicy":"{\"maxReceiveCount\":\"3\", \"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:123456789012:notification-dlq\"}"
+  }'
+
+```
+
 ## Folder Structure
 
 ```

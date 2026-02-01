@@ -1,5 +1,5 @@
 import { createJob, getJobById } from "../services/jobService.js";
-import { sendMessage } from "../services/sqsService.js";
+import { sendNotification } from "../services/sqsService.js";
 
 export const createJobController = async (req, res) => {
   try {
@@ -12,7 +12,8 @@ export const createJobController = async (req, res) => {
       createdAt: new Date().toISOString(),
     };
 
-    const result = await sendMessage(message);
+    // const result = await sendMessage(message);
+    const result = await sendNotification(message);
     console.log(`[Producer] Sent job ${job._id} to SQS, MessageId: ${result.MessageId}`);
 
     res.json({ jobId: job._id });

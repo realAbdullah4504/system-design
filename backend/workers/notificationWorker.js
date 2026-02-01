@@ -49,7 +49,7 @@ async function processMessage(message) {
 }
 
 // Polling loop
-async function pollQueue() {
+async function pollNotification() {
     while (true) {
         try {
             const data = await receiveMessages(NOTIFICATION_QUEUE_URL);
@@ -63,4 +63,4 @@ async function pollQueue() {
     }
 }
 
-export { pollQueue };
+export { pollNotification };
