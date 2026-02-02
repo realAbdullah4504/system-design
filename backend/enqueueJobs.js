@@ -1,4 +1,4 @@
-const axios = require("axios");
+import axios from "axios";
 
 const API_BASE = "http://localhost:3000";
 const TOTAL_JOBS = 10;
@@ -19,4 +19,4 @@ async function enqueueJobs() {
   }
 }
 
-enqueueJobs();
+await enqueueJobs();
