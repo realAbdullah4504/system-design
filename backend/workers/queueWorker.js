@@ -11,6 +11,7 @@ async function processMessage(message) {
   try {
     const snsNotification = JSON.parse(message.Body);
     job=JSON.parse(snsNotification.Message);
+    console.log("job",job)
     receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
 
     // Idempotent processing - check if already processed

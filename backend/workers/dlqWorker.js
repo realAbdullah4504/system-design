@@ -12,7 +12,8 @@ async function pollDLQ() {
         console.log(`[DLQ Monitor] Found ${data.Messages.length} failed messages`);
         
         for (const message of data.Messages) {
-          const job = JSON.parse(message.Body);
+          const snsNotification = JSON.parse(message.Body);
+          const job = JSON.parse(snsNotification.Message);
           console.log(`[DLQ Monitor] Failed job: ${job.jobId}, receive count: ${message.Attributes?.ApproximateReceiveCount}`);
           
           // Update job status to FAILED in database
