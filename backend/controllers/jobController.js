@@ -5,22 +5,21 @@ import { createJobDelivery } from "../services/jobDeliveryService.js";
 export const createJobController = async (req, res) => {
   try {
     const job = await createJob({ name: req.body.name });
+    const channels = ["notification", "email"];
     const message = {
       jobId: job._id.toString(),
       name: job.name,
       task: job.name,
-      retryCount: 0,
+      channels,
       createdAt: new Date().toISOString(),
     };
-
-    const channels = ["notification", "email"];
 
     for (const channel of channels) {
       await createJobDelivery({
         jobId: job._id,
         channel,
         status: "PENDING",
-        attemptCount: 0
+        attemptCount: 0,
       });
     }
 
@@ -28,7 +27,7 @@ export const createJobController = async (req, res) => {
 
     console.log(`[Producer] Sent job ${job._id} to SNS`);
 
-    // const resultMessage = await sendMessage(message);  
+    // const resultMessage = await sendMessage(message);
     // const resultNotification = await sendNotification(message);
     // console.log(`[Producer] Sent job ${job._id} to SQS, MessageId: ${resultMessage.MessageId}`);
     // console.log(`[Producer] Sent job ${job._id} to SQS, MessageId: ${resultNotification.MessageId}`);

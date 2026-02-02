@@ -1,5 +1,8 @@
 import { receiveMessages, deleteMessage } from "../services/sqsService.js";
-import { updateJobStatus } from "../services/jobService.js";
+import {
+  updateJobDelivery,
+  findJobDeliveryByJobIdAndChannel,
+} from "../services/jobDeliveryService.js";
 import { DLQ_URL } from "../config/sqs.js";
 
 // Polling loop for DLQ monitoring
@@ -9,22 +12,33 @@ async function pollDLQ() {
       const data = await receiveMessages(DLQ_URL, 10);
 
       if (data.Messages) {
-        console.log(`[DLQ Monitor] Found ${data.Messages.length} failed messages`);
-        
+        console.log(
+          `[DLQ Monitor] Found ${data.Messages.length} failed messages`
+        );
+
         for (const message of data.Messages) {
           const snsNotification = JSON.parse(message.Body);
           const job = JSON.parse(snsNotification.Message);
-          console.log(`[DLQ Monitor] Failed job: ${job.jobId}, receive count: ${message.Attributes?.ApproximateReceiveCount}`);
-          
+          job.channel = "email";
+          const existingJobDelivery = await findJobDeliveryByJobIdAndChannel(
+            job.jobId,
+            job.channel
+          );
+          console.log(
+            `[DLQ Monitor] Failed job: ${job.jobId}, receive count: ${message.Attributes?.ApproximateReceiveCount}`
+          );
+
           // Update job status to FAILED in database
-          await updateJobStatus(job.jobId, { 
+          await updateJobDelivery(existingJobDelivery._id, {
             status: "FAILED",
             error: "Job exceeded maximum retry attempts",
-            finishedAt: new Date()
+            finishedAt: new Date(),
           });
-          
-          console.log(`[DLQ Monitor] Updated job ${job.jobId} status to FAILED`);
-          
+
+          console.log(
+            `[DLQ Monitor] Updated job ${job.jobId} status to FAILED`
+          );
+
           // Delete from DLQ after processing/monitoring
           await deleteMessage(DLQ_URL, message.ReceiptHandle);
         }

@@ -1,7 +1,7 @@
 import { receiveMessages, deleteMessage } from "../services/sqsService.js";
-import { findJobDeliveryByJobIdAndChannel, findJobDeliveryById } from "../services/jobService.js";
 import { sleep } from "../utils/sleep.js";
 import { QUEUE_URL } from "../config/sqs.js";
+import { updateJobDelivery, findJobDeliveryByJobIdAndChannel } from "../services/jobDeliveryService.js";
 
 // Worker function
 async function processMessage(message) {
@@ -35,21 +35,14 @@ async function processMessage(message) {
       startedAt: new Date(),
       messageId: message.MessageId,
     });
-
-    console.log(
-      "message.MessageId",
-      message.MessageId,
-      receiveCount,
-      job.jobId
-    );
-
+    
     await sleep(2000);
 
     if (Math.random() < 0.8) throw new Error("Simulated failure");
 
     console.log(`[Worker] Job ${job.jobId} finished successfully.`);
 
-    await updateJobDelivery(job.jobId, {
+    await updateJobDelivery(existingJobDelivery._id, {
       status: "FINISHED",
       finishedAt: new Date(),
     });
