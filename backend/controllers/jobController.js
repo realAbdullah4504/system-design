@@ -1,5 +1,6 @@
 import { createJob, getJobById } from "../services/jobService.js";
 import { publishJobEvent } from "../services/snsService.js";
+import { createJobDelivery } from "../services/jobDeliveryService.js";
 
 export const createJobController = async (req, res) => {
   try {
@@ -11,6 +12,17 @@ export const createJobController = async (req, res) => {
       retryCount: 0,
       createdAt: new Date().toISOString(),
     };
+
+    const channels = ["notification", "email"];
+
+    for (const channel of channels) {
+      await createJobDelivery({
+        jobId: job._id,
+        channel,
+        status: "PENDING",
+        attemptCount: 0
+      });
+    }
 
     await publishJobEvent(message);
 

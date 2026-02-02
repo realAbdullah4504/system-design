@@ -1,5 +1,5 @@
 import { receiveMessages, deleteMessage } from "../services/sqsService.js";
-import { updateJobStatus, findJobByMessageId } from "../services/jobService.js";
+import { findJobDeliveryByJobIdAndChannel, findJobDeliveryById } from "../services/jobService.js";
 import { sleep } from "../utils/sleep.js";
 import { QUEUE_URL } from "../config/sqs.js";
 
@@ -7,30 +7,41 @@ import { QUEUE_URL } from "../config/sqs.js";
 async function processMessage(message) {
   let job = null;
   let receiveCount = 0;
-  
+
   try {
     const snsNotification = JSON.parse(message.Body);
-    job=JSON.parse(snsNotification.Message);
+    job = JSON.parse(snsNotification.Message);
+    job.channel = "email";
     receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
 
     // Idempotent processing - check if already processed
-    const existingJob = await findJobByMessageId(message.MessageId);
-    if (existingJob && existingJob.status === "FINISHED") {
+    const existingJobDelivery = await findJobDeliveryByJobIdAndChannel(
+      job.jobId,
+      job.channel
+    );
+    if (existingJobDelivery && existingJobDelivery.status === "FINISHED") {
       console.log(`[Worker] Job ${job.jobId} already processed, skipping`);
       await deleteMessage(QUEUE_URL, message.ReceiptHandle);
       return;
     }
 
-    console.log(`[Worker] Processing job ${job.jobId}, attempt #${receiveCount}`);
+    console.log(
+      `[Worker] Processing job ${job.jobId}, attempt #${receiveCount}`
+    );
 
     // Update status to RUNNING
-    await updateJobStatus(job.jobId, { 
-      status: "RUNNING", 
+    await updateJobDelivery(existingJobDelivery._id, {
+      status: "RUNNING",
       startedAt: new Date(),
-      messageId: message.MessageId 
+      messageId: message.MessageId,
     });
 
-    console.log("message.MessageId",message.MessageId,receiveCount,job.jobId)
+    console.log(
+      "message.MessageId",
+      message.MessageId,
+      receiveCount,
+      job.jobId
+    );
 
     await sleep(2000);
 
@@ -38,13 +49,12 @@ async function processMessage(message) {
 
     console.log(`[Worker] Job ${job.jobId} finished successfully.`);
 
-    await updateJobStatus(job.jobId, { 
+    await updateJobDelivery(job.jobId, {
       status: "FINISHED",
-      finishedAt: new Date()
+      finishedAt: new Date(),
     });
 
     await deleteMessage(QUEUE_URL, message.ReceiptHandle);
-
   } catch (error) {
     console.error(`[Worker] Error processing job:`, error.message);
     // Do NOT delete → SQS will handle DLQ routing after 3rd attempt
