@@ -1,5 +1,5 @@
-const mongoose = require("mongoose");
-const { v4: uuidv4 } = require("uuid");
+import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
 
 const jobSchema = new mongoose.Schema(
   {
@@ -26,4 +26,4 @@ const jobSchema = new mongoose.Schema(
 // Compound index for idempotency
 jobSchema.index({ messageId: 1 }, { unique: true });
 
-module.exports = mongoose.model("Job", jobSchema);
+export default mongoose.model("Job", jobSchema);

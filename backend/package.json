@@ -10,6 +10,7 @@
     "dlq:worker": "nodemon workers/dlqWorker.js",
     "notification:worker": "nodemon workers/notificationWorker.js"
   },
+  "type": "module",
   "keywords": [],
   "author": "",
   "license": "ISC",
