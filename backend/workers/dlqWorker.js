@@ -4,6 +4,7 @@ import {
   findJobDeliveryByJobIdAndChannel,
 } from "../services/jobDeliveryService.js";
 import { DLQ_URL } from "../config/sqs.js";
+import { aggregateJobStatus } from "../services/jobService.js";
 
 // Polling loop for DLQ monitoring
 async function pollDLQ() {
@@ -38,7 +39,7 @@ async function pollDLQ() {
           console.log(
             `[DLQ Monitor] Updated job ${job.jobId} status to FAILED`
           );
-
+          await aggregateJobStatus(job.jobId);
           // Delete from DLQ after processing/monitoring
           await deleteMessage(DLQ_URL, message.ReceiptHandle);
         }

@@ -4,6 +4,7 @@ import {
   findJobDeliveryByJobIdAndChannel,
 } from "../services/jobDeliveryService.js";
 import { NOTIFICATION_DLQ_URL } from "../config/sqs.js";
+import { aggregateJobStatus } from "../services/jobService.js";
 
 // Polling loop for DLQ monitoring
 async function pollDLQNotification() {
@@ -33,7 +34,7 @@ async function pollDLQNotification() {
             error: "Job exceeded maximum retry attempts",
             finishedAt: new Date(),
           });
-
+          await aggregateJobStatus(job.jobId);
           console.log(
             `[DLQ Monitor] Updated job ${job.jobId} status to FAILED`
           );

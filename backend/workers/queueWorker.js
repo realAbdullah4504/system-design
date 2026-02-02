@@ -2,6 +2,7 @@ import { receiveMessages, deleteMessage } from "../services/sqsService.js";
 import { sleep } from "../utils/sleep.js";
 import { QUEUE_URL } from "../config/sqs.js";
 import { updateJobDelivery, findJobDeliveryByJobIdAndChannel } from "../services/jobDeliveryService.js";
+import { aggregateJobStatus } from "../services/jobService.js";
 
 // Worker function
 async function processMessage(message) {
@@ -46,6 +47,9 @@ async function processMessage(message) {
       status: "FINISHED",
       finishedAt: new Date(),
     });
+
+    // Aggregate overall job status
+    await aggregateJobStatus(job.jobId);
 
     await deleteMessage(QUEUE_URL, message.ReceiptHandle);
   } catch (error) {

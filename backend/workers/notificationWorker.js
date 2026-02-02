@@ -5,6 +5,7 @@ import {
   findJobDeliveryByJobIdAndChannel,
   updateJobDelivery,
 } from "../services/jobDeliveryService.js";
+import { aggregateJobStatus } from "../services/jobService.js";
 
 // Worker function
 async function processMessage(message) {
@@ -47,6 +48,9 @@ async function processMessage(message) {
       status: "FINISHED",
       finishedAt: new Date(),
     });
+
+    // Aggregate overall job status
+    await aggregateJobStatus(job.jobId);
 
     await deleteMessage(NOTIFICATION_QUEUE_URL, message.ReceiptHandle);
   } catch (error) {
