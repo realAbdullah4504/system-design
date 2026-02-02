@@ -1,5 +1,4 @@
 import { receiveMessages, deleteMessage } from "../services/sqsService.js";
-import { updateJobStatus, findJobByMessageId } from "../services/jobService.js";
 import { sleep } from "../utils/sleep.js";
 import { NOTIFICATION_QUEUE_URL } from "../config/sqs.js";
 
@@ -13,33 +12,13 @@ async function processMessage(message) {
         job = JSON.parse(snsNotification.Message);
         receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
 
-        // Idempotent processing - check if already processed
-        const existingJob = await findJobByMessageId(message.MessageId);
-        if (existingJob && existingJob.status === "FINISHED") {
-            console.log(`[Worker] Job ${job.jobId} already processed, skipping`);
-            await deleteMessage(NOTIFICATION_QUEUE_URL, message.ReceiptHandle);
-            return;
-        }
-
         console.log(`[Worker] Processing job ${job.jobId}, attempt #${receiveCount}`);
-
-        // Update status to RUNNING
-        await updateJobStatus(job.jobId, {
-            status: "RUNNING",
-            startedAt: new Date(),
-            messageId: message.MessageId
-        });
 
         await sleep(2000);
 
         if (Math.random() < 0.8) throw new Error("Simulated failure");
 
         console.log(`[Worker] Job ${job.jobId} finished successfully.`);
-
-        await updateJobStatus(job.jobId, {
-            status: "FINISHED",
-            finishedAt: new Date()
-        });
 
         await deleteMessage(NOTIFICATION_QUEUE_URL, message.ReceiptHandle);
 
