@@ -1,31 +1,23 @@
 const express = require("express");
-const mongoose = require("mongoose");
-const jobQueue = require("./queue/jobQueue");
-const Job = require("./models/Job");
 
 const app = express();
 app.use(express.json());
 
-mongoose.connect("mongodb://127.0.0.1:27017/jobs");
 
-app.post("/jobs", async (req, res) => {
-  const { name } = req.body;
-  try {
-    const job = await Job.create({
-      name,
-      status: "CREATED",
-    });
-
-    await jobQueue.add("process-job", {
-      jobId: job._id.toString(),
-    });
-
-    res.status(202).json({ jobId: job._id });
-  } catch (error) {
-    console.error("Error creating job:", error);
-    res.status(500).json({ error: "Failed to create job" });
-  }
+app.use((req, res, next) => {
+  console.log(`[${process.env.HOSTNAME}] ${req.method} ${req.url}`);
+  next();
 });
+
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "ok",
+    service: "notification-service",
+    instanceId: process.env.HOSTNAME || "unknown",
+    timestamp: new Date().toISOString()
+  });
+});
+
 
 app.listen(3000, () => {
   console.log("API running on port 3000");

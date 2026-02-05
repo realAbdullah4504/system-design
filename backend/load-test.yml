@@ -1,0 +1,9 @@
+config:
+  target: "http://13.218.191.246:3000"
+  phases:
+    - duration: 60
+      arrivalRate: 1000 # 5 users per second
+scenarios:
+  - flow:
+      - get:
+          url: "/health"
