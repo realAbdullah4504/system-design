@@ -1,9 +1,18 @@
 config:
-  target: "http://13.218.191.246:3000"
+  target: "http://localhost:3000"
+  http:
+    pool: 1000   # reuse up to 1000 connections
+    keepAlive: true
   phases:
     - duration: 60
-      arrivalRate: 1000 # 5 users per second
+      arrivalRate: 50
+    - duration: 60
+      arrivalRate: 100
+    - duration: 60
+      arrivalRate: 200
+
 scenarios:
-  - flow:
+  - name: compute
+    flow:
       - get:
-          url: "/health"
+          url: "/stress-cpu"
