@@ -35,7 +35,7 @@ The goal is **progressive complexity**, ensuring each component scales safely be
 
 ## 3️⃣ Stage 3 Substages
 
-### **3a – Single Service Horizontal Scaling**
+### **3 – Single Service Horizontal Scaling**
 
 **Objective:** Scale one service horizontally without queues or multiple producers.
 
