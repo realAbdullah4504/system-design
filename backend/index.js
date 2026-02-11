@@ -1,5 +1,5 @@
 const express = require("express");
-
+const os = require("os");
 const app = express();
 app.use(express.json());
 
@@ -9,21 +9,40 @@ app.use((req, res, next) => {
   next();
 });
 
+// Helper function to get the first non-internal IPv4 address
+function getServerIP() {
+  const nets = os.networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+      if (net.family === "IPv4" && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return "unknown";
+}
+// CPU-bound task (blocks event loop)
 app.get("/stress-cpu", (req, res) => {
   const start = Date.now();
   while (Date.now() - start < 200) {
     Math.sqrt(Math.random());
   }
-  res.json({ ok: true });
+  res.json({ 
+    ok: true, 
+    type: "CPU-bound",
+    server: os.hostname(),
+  });
 });
 
-
-let leak = [];
-
-app.get("/stress-mem", (req, res) => {
-  const sizeMb = Number(req.query.mb || 10);
-  leak.push(Buffer.alloc(sizeMb * 1024 * 1024));
-  res.json({ allocatedMb: sizeMb, totalChunks: leak.length });
+// Async "I/O-bound" simulation (does NOT block event loop)
+app.get("/async-wait", async (req, res) => {
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  res.json({ 
+    ok: true, 
+    type: "Async I/O-bound",
+    server: os.hostname(),
+    ip: getServerIP(),
+  });
 });
 
 

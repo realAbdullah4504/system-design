@@ -1,14 +1,27 @@
 config:
-  target: "http://loadtest-327483427.us-east-1.elb.amazonaws.com"
-  http:
-    pool: 1000   # reuse up to 1000 connections
-    keepAlive: true
+  target: "http://localhost:3000"
   phases:
-    - duration: 600
-      arrivalRate: 5  # 5 requests per second
+    # Warm-up phase: moderate load
+    - duration: 120      # 2 minutes
+      arrivalRate: 100   # 100 requests per second
+      rampTo: 200        # gradually increase to 200 RPS
+
+    # Spike phase: high load
+    - duration: 180      # 3 minutes
+      arrivalRate: 200
+      rampTo: 500        # gradually increase to 500 RPS
+
+    # Cooldown phase: back to moderate load
+    - duration: 120      # 2 minutes
+      arrivalRate: 500
+      rampTo: 100        # gradually decrease
+
+  defaults:
+    headers:
+      Content-Type: "application/json"
 
 scenarios:
-  - name: stress-cpu
+  - name: async-wait
     flow:
       - get:
-          url: "/stress-cpu"
+          url: "/async-wait"
