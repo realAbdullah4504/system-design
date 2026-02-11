@@ -9,18 +9,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Helper function to get the first non-internal IPv4 address
-function getServerIP() {
-  const nets = os.networkInterfaces();
-  for (const name of Object.keys(nets)) {
-    for (const net of nets[name]) {
-      if (net.family === "IPv4" && !net.internal) {
-        return net.address;
-      }
-    }
-  }
-  return "unknown";
-}
 // CPU-bound task (blocks event loop)
 app.get("/stress-cpu", (req, res) => {
   const start = Date.now();
@@ -41,7 +29,6 @@ app.get("/async-wait", async (req, res) => {
     ok: true, 
     type: "Async I/O-bound",
     server: os.hostname(),
-    ip: getServerIP(),
   });
 });
 
