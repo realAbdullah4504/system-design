@@ -4,15 +4,11 @@ config:
     pool: 1000   # reuse up to 1000 connections
     keepAlive: true
   phases:
-    - duration: 60
-      arrivalRate: 50
-    - duration: 60
-      arrivalRate: 100
-    - duration: 60
-      arrivalRate: 200
+    - duration: 600
+      arrivalRate: 5  # 5 requests per second
 
 scenarios:
-  - name: compute
+  - name: stress-cpu
     flow:
       - get:
           url: "/stress-cpu"
