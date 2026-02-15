@@ -28,7 +28,6 @@ app.get("/async-wait", async (req, res) => {
   res.json({ 
     ok: true, 
     type: "Async I/O-bound",
-    server: os.hostname(),
   });
 });
 

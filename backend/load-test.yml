@@ -1,27 +1,21 @@
 config:
   target: "http://localhost:3000"
   phases:
-    # Warm-up phase: moderate load
-    - duration: 120      # 2 minutes
-      arrivalRate: 100   # 100 requests per second
-      rampTo: 200        # gradually increase to 200 RPS
 
-    # Spike phase: high load
-    - duration: 180      # 3 minutes
-      arrivalRate: 200
-      rampTo: 500        # gradually increase to 500 RPS
-
-    # Cooldown phase: back to moderate load
-    - duration: 120      # 2 minutes
-      arrivalRate: 500
-      rampTo: 100        # gradually decrease
+    # 🔴 Sustained peak (THIS is where you measure throughput)
+    - duration: 60
+      arrivalRate: 300
+      name: "Sustained load"
 
   defaults:
     headers:
       Content-Type: "application/json"
 
+  plugins:
+    metrics-by-endpoint: {}
+
 scenarios:
-  - name: async-wait
+  - name: "Async throughput test"
     flow:
       - get:
           url: "/async-wait"
