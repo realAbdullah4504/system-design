@@ -1,11 +1,14 @@
 config:
   target: "http://localhost:3000"
-  phases:
+  pool:
 
-    # 🔴 Sustained peak (THIS is where you measure throughput)
+  phases:
     - duration: 60
-      arrivalRate: 300
-      name: "Sustained load"
+      arrivalRate: 100
+    - duration: 60
+      arrivalRate: 500
+    - duration: 60
+      arrivalRate: 1000
 
   defaults:
     headers:
@@ -13,6 +16,12 @@ config:
 
   plugins:
     metrics-by-endpoint: {}
+
+  # Connection settings to prevent EADDRINUSE
+  http:
+    timeout: 30
+    pool: 50 # Reuse connections
+    maxSockets: 100
 
 scenarios:
   - name: "Async throughput test"
