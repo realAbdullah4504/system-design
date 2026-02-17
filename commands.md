@@ -1,3 +1,7 @@
+# SQS commands
+aws sqs create-queue --queue-name my-app-jobs
+
+
 # Docker Commands
 
 ## Login to AWS ECR

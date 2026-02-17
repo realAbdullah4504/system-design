@@ -22,7 +22,7 @@ async function processMessage(message) {
 
     // if (Math.random() < 0.8) throw new Error("Simulated failure");
 
-    console.log(`[Worker] Job ${messageBody.jobId} finished successfully.`);
+    console.log(`[Worker] Job ${messageBody.type} finished successfully.`);
 
 
     await deleteMessage(QUEUE_URL, message.ReceiptHandle);
@@ -46,4 +46,4 @@ async function pollQueue() {
     }
   }
 }
-export { pollQueue };
+pollQueue();
