@@ -17,12 +17,12 @@ async function processMessage(message) {
     console.log("CPU-bound task completed");
 
     console.log(
-      `[Worker] Processing job ${messageBody.jobId}, attempt #${receiveCount}`
+      `[Worker] Processing job ${messageBody.type}, attempt #${receiveCount}`
     );
 
     // if (Math.random() < 0.8) throw new Error("Simulated failure");
 
-    console.log(`[Worker] Job ${messageBody.jobId} finished successfully.`);
+    console.log(`[Worker] Job ${messageBody.type} finished successfully.`);
 
 
     await deleteMessage(QUEUE_URL, message.ReceiptHandle);
