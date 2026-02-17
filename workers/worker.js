@@ -6,21 +6,21 @@ async function processMessage(message) {
   let receiveCount = 0;
 
   try {
-    const snsNotification = JSON.parse(message.Body);
-    const messageBody = JSON.parse(snsNotification.Message);
+    const messageBody = JSON.parse(message.Body);
+    console.log("[Worker] Received message:", messageBody);
     receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
 
-    if (messageBody.status === "FINISHED") {
-      console.log(`[Worker] Job ${messageBody.jobId} already processed, skipping`);
-      await deleteMessage(QUEUE_URL, message.ReceiptHandle);
-      return;
+    while (messageBody.payload.iterations > 0) {
+      Math.sqrt(Math.random());
+      messageBody.payload.iterations--;
     }
+    console.log("CPU-bound task completed");
 
     console.log(
       `[Worker] Processing job ${messageBody.jobId}, attempt #${receiveCount}`
     );
 
-    if (Math.random() < 0.8) throw new Error("Simulated failure");
+    // if (Math.random() < 0.8) throw new Error("Simulated failure");
 
     console.log(`[Worker] Job ${messageBody.jobId} finished successfully.`);
 
