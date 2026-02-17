@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-sqs": "^3.991.0",
     "@bull-board/express": "^6.16.4",
     "axios": "^1.13.3",
     "bullmq": "^5.67.1",
