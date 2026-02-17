@@ -1,30 +1,35 @@
 config:
   target: "http://localhost:3000"
-  pool:
 
   phases:
     - duration: 60
       arrivalRate: 100
+      name: "Warm up"
     - duration: 60
       arrivalRate: 500
+      name: "Medium load"
     - duration: 60
       arrivalRate: 1000
+      name: "Heavy load"
 
   defaults:
     headers:
       Content-Type: "application/json"
 
-  plugins:
-    metrics-by-endpoint: {}
-
-  # Connection settings to prevent EADDRINUSE
   http:
     timeout: 30
-    pool: 50 # Reuse connections
-    maxSockets: 100
+    pool: 100
+    maxSockets: 200
 
 scenarios:
-  - name: "Async throughput test"
+  - name: "Mixed DB Load"
+    weight: 3
     flow:
       - get:
-          url: "/async-wait"
+          url: "/db-read"
+
+  - name: "Write Load"
+    weight: 1
+    flow:
+      - post:
+          url: "/db-write"

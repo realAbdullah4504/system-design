@@ -20,6 +20,15 @@ const mongoOptions = {
 // Connect to MongoDB
 mongoose.connect(mongoURI, mongoOptions);
 
+const { Schema, model } = mongoose;
+
+const LoadSchema = new Schema({
+  name: String,
+  value: Number,
+}, { timestamps: true });
+
+const LoadModel = model("LoadTest", LoadSchema);
+
 const db = mongoose.connection;
 db.on("connected", () => console.log("MongoDB connected ✅"));
 db.on("error", (err) => console.error("MongoDB connection error ❌", err));
@@ -56,6 +65,34 @@ app.get("/stress-cpu", (req, res) => {
     server: os.hostname(),
   });
 });
+
+app.post("/db-write", async (req, res) => {
+  try {
+    const doc = await LoadModel.create({
+      name: "user-" + Math.random().toString(36).substring(7),
+      value: Math.floor(Math.random() * 1000)
+    });
+
+    res.json({ ok: true, id: doc._id });
+  } catch (err) {
+    console.error("DB write failed ❌", err);
+    res.status(500).json({ ok: false });
+  }
+});
+
+app.get("/db-read", async (req, res) => {
+  try {
+    const docs = await LoadModel
+      .find()
+      .limit(20);
+
+    res.json({ ok: true, count: docs.length });
+  } catch (err) {
+    console.error("DB read failed ❌", err);
+    res.status(500).json({ ok: false });
+  }
+});
+
 
 // Async "I/O-bound" simulation (does NOT block event loop)
 app.get("/async-wait", async (req, res) => {
