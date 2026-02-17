@@ -1,6 +1,7 @@
 import express from "express";
 import os from "os";
 import { sendMessage } from "./services/sqs.js";
+import { pollQueue } from "./worker.js";
 const app = express();
 app.use(express.json());
 
@@ -54,4 +55,5 @@ app.get("/health", (req, res) => {
 
 app.listen(3000, () => {
   console.log("API running on port 3000");
+  pollQueue();
 });

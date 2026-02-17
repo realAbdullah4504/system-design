@@ -1,21 +1,11 @@
 config:
-  target: "http://localhost:3000"
+  target: "http://localhost:3000"  # your API URL
   phases:
-
-    # 🔴 Sustained peak (THIS is where you measure throughput)
-    - duration: 60
-      arrivalRate: 300
-      name: "Sustained load"
-
-  defaults:
-    headers:
-      Content-Type: "application/json"
-
-  plugins:
-    metrics-by-endpoint: {}
+    - duration: 60   # run for 60 seconds
+      arrivalRate: 5  # 50 requests per second
 
 scenarios:
-  - name: "Async throughput test"
+  - name: "Push CPU jobs to SQS"
     flow:
       - get:
-          url: "/async-wait"
+          url: "/stress-cpu"
