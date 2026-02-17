@@ -1,5 +1,6 @@
-const express = require("express");
-const os = require("os");
+import express from "express";
+import os from "os";
+import { sendMessage } from "./services/sqs.js";
 const app = express();
 app.use(express.json());
 
@@ -9,17 +10,26 @@ app.use((req, res, next) => {
   next();
 });
 
-// CPU-bound task (blocks event loop)
-app.get("/stress-cpu", (req, res) => {
-  const start = Date.now();
-  while (Date.now() - start < 200) {
-    Math.sqrt(Math.random());
+app.get("/stress-cpu", async (req, res) => {
+  // Push job to SQS instead of processing here
+  const job = {
+    type: "cpu-intensive",
+    payload: { iterations: 1e7 }, // example workload
+    timestamp: Date.now(),
+  };
+
+  try {
+    await sendMessage(job);
+
+    res.json({
+      ok: true,
+      status: "Job submitted to queue",
+      server: os.hostname(),
+    });
+  } catch (err) {
+    console.error("SQS sendMessage error:", err);
+    res.status(500).json({ ok: false, error: "Failed to enqueue job" });
   }
-  res.json({ 
-    ok: true, 
-    type: "CPU-bound",
-    server: os.hostname(),
-  });
 });
 
 // Async "I/O-bound" simulation (does NOT block event loop)

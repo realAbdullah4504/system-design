@@ -8,7 +8,6 @@ async function processMessage(message) {
   try {
     const snsNotification = JSON.parse(message.Body);
     const messageBody = JSON.parse(snsNotification.Message);
-    messageBody.channel = "email";
     receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
 
     if (messageBody.status === "FINISHED") {
