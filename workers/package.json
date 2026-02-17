@@ -8,5 +8,9 @@
   },
   "author": "",
   "license": "ISC",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.991.0",
+    "dotenv": "^17.3.1"
+  }
 }
