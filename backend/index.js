@@ -14,7 +14,7 @@ app.get("/stress-cpu", async (req, res) => {
   // Push job to SQS instead of processing here
   const job = {
     type: "cpu-intensive",
-    payload: { iterations: 1e7 }, // example workload
+    payload: { duration: 1000 }, // example workload
     timestamp: Date.now(),
   };
 

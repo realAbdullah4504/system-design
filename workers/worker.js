@@ -10,10 +10,11 @@ async function processMessage(message) {
     console.log("[Worker] Received message:", messageBody);
     receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
 
-    while (messageBody.payload.iterations > 0) {
-      Math.sqrt(Math.random());
-      messageBody.payload.iterations--;
-    }
+    // while (messageBody.payload.iterations > 0) {
+    //   Math.sqrt(Math.random());
+    //   messageBody.payload.iterations--;
+    // }
+    await new Promise((resolve) => setTimeout(resolve, messageBody.payload.duration));
     console.log("CPU-bound task completed");
 
     console.log(
