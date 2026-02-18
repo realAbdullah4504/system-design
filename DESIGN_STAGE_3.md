@@ -73,9 +73,9 @@ The goal is **progressive complexity**, ensuring each component scales safely be
 
 ---
 
-### **3c – Single Queue + Single Worker**
+### **3c – Single Queue + Single Worker , Horizontal Worker Scaling**
 
-**Objective:** Introduce background processing to scaled services.
+**Objective:** Introduce background processing to scaled services and Scale multiple workers horizontally to process the same queue.
 
 **Actions:**
 
@@ -83,21 +83,6 @@ The goal is **progressive complexity**, ensuring each component scales safely be
 * Deploy **single worker instance** consuming from the queue
 * Test job processing and retry logic under load
 * Monitor queue backlog and processing metrics
-
-**Outputs:**
-
-* Single worker processes jobs reliably
-* Queue metrics available
-* Baseline for worker scaling
-
----
-
-### **3d – Horizontal Worker Scaling**
-
-**Objective:** Scale multiple workers horizontally to process the same queue.
-
-**Actions:**
-
 * Deploy multiple worker instances as ECS tasks or EC2 instances
 * Test concurrent processing of jobs
 * Ensure **idempotency** to prevent duplicate work
@@ -105,13 +90,14 @@ The goal is **progressive complexity**, ensuring each component scales safely be
 
 **Outputs:**
 
+* Single worker processes jobs reliably
+* Queue metrics available
+* Baseline for worker scaling
 * Horizontally scaled workers reducing backlog
 * Observability of queue consumption performance
 * Idempotency ensures safe multi-worker processing
 
----
-
-### **3e – Full Cluster Orchestration**
+### **3d – Full Cluster Orchestration**
 
 **Objective:** Multi-service, multi-queue system with fanout, monitoring, and failure recovery.
 
