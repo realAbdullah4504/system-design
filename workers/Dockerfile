@@ -2,22 +2,14 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
+ENV NODE_ENV=production
+
 COPY package*.json ./
+RUN npm ci --omit=dev
 
-# Install dependencies
-RUN npm ci --only=production
-
-# Copy application code
 COPY . .
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
-
-# Change ownership of the app directory
-RUN chown -R nodejs:nodejs /app
+RUN addgroup -S nodejs && adduser -S nodejs -G nodejs
 USER nodejs
 
-# Run the worker
 CMD ["node", "worker.js"]

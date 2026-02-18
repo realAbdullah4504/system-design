@@ -1,6 +1,11 @@
 # SQS commands
 aws sqs create-queue --queue-name my-app-jobs
 
+# Reaching server
+curl -v https://sqs.us-east-1.amazonaws.com
+
+
+
 
 # Docker Commands
 
@@ -13,18 +18,26 @@ aws ecr get-login-password --region us-east-1 \
 ## Build Docker Image
 ```bash
 docker build -t notification-service:latest .
+
+docker build -t worker-service:latest .
 ```
 
 ## Tag Docker Image
 ```bash
 docker tag notification-service:latest \
 588738579221.dkr.ecr.us-east-1.amazonaws.com/notification-service
+
+docker tag worker-service:latest \
+588738579221.dkr.ecr.us-east-1.amazonaws.com/worker-service:latest
 ```
 
 ## Push to ECR
 ```bash
 docker push \
 588738579221.dkr.ecr.us-east-1.amazonaws.com/notification-service:latest
+
+docker push \
+588738579221.dkr.ecr.us-east-1.amazonaws.com/worker-service:latest
 ```
 
 # Load Testing Commands

@@ -2,6 +2,7 @@
   "name": "workers",
   "version": "1.0.0",
   "main": "worker.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon worker.js"
