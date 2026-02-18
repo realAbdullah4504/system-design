@@ -3,29 +3,29 @@ aws sns create-topic \
     --name loadtest-events-topic
 
 aws sqs create-queue \
-  --queue-name notification-queue
+  --queue-name loadtest-notification-queue
 
 aws sqs create-queue \
-  --queue-name notification-dlq
+  --queue-name loadtest-notification-dlq
 
 aws sqs get-queue-attributes \
-  --queue-url https://sqs.us-east-1.amazonaws.com/123456789012/notification-dlq \
+  --queue-url https://sqs.us-east-1.amazonaws.com/588738579221/loadtest-notification-queue \
   --attribute-names QueueArn
 
 aws sqs set-queue-attributes \
-  --queue-url https://sqs.us-east-1.amazonaws.com/123456789012/notification-queue \
+  --queue-url https://sqs.us-east-1.amazonaws.com/588738579221/loadtest-notification-queue \
   --attributes '{
-      "RedrivePolicy":"{\"maxReceiveCount\":\"3\", \"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:123456789012:notification-dlq\"}"
+      "RedrivePolicy":"{\"maxReceiveCount\":\"3\", \"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:588738579221:notification-dlq\"}"
   }'
 
 aws sns subscribe \
-  --topic-arn arn:aws:sns:us-east-1:588738579221:job-events-topic \
+  --topic-arn arn:aws:sns:us-east-1:588738579221:loadtest-events-topic \
   --protocol sqs \
-  --notification-endpoint arn:aws:sqs:us-east-1:588738579221:notification-queue
+  --notification-endpoint arn:aws:sqs:us-east-1:588738579221:my-app-jobs
 
 aws sqs set-queue-attributes \
-  --queue-url https://sqs.us-east-1:588738579221/notification-queue \
-  --attributes '{"Policy":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":\"sqs:SendMessage\",\"Resource\":\"arn:aws:sqs:us-east-1:588738579221:notification-queue\",\"Condition\":{\"ArnEquals\":{\"aws:SourceArn\":\"arn:aws:sns:us-east-1:588738579221:job-events-topic\"}}}]}"}'
+  --queue-url https://sqs.us-east-1:588738579221/loadtest-notification-queue \
+  --attributes '{"Policy":"{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Principal\":\"*\",\"Action\":\"sqs:SendMessage\",\"Resource\":\"arn:aws:sqs:us-east-1:588738579221:loadtest-notification-queue\",\"Condition\":{\"ArnEquals\":{\"aws:SourceArn\":\"arn:aws:sns:us-east-1:588738579221:loadtest-events-topic\"}}}]}"}'
 
 ## Reaching server
 curl -v https://sqs.us-east-1.amazonaws.com
@@ -46,6 +46,8 @@ aws ecr get-login-password --region us-east-1 \
 docker build -t notification-service:latest .
 
 docker build -t worker-service:latest .
+
+docker build -f notification-Dockerfile -t notification-worker .
 ```
 
 ### Tag Docker Image

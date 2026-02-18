@@ -16,6 +16,7 @@ app.get("/stress-cpu", async (req, res) => {
     jobId: "test-job-id",
     name: "test-job",
     task: "test-job",
+    duration: 1000,
     channels,
     createdAt: new Date().toISOString(),
   };

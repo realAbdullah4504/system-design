@@ -13,6 +13,7 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@aws-sdk/client-sns": "^3.992.0",
     "@aws-sdk/client-sqs": "^3.991.0",
     "@bull-board/express": "^6.16.4",
     "axios": "^1.13.3",

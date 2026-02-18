@@ -6,7 +6,9 @@ async function processMessage(message) {
   let receiveCount = 0;
 
   try {
-    const messageBody = JSON.parse(message.Body);
+    const snsMessage = JSON.parse(message.Body);
+    const messageBody = JSON.parse(snsMessage.Message);
+
     console.log("[Worker] Received message:", messageBody);
     receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
 
