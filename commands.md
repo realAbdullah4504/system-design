@@ -57,6 +57,9 @@ docker tag notification-service:latest \
 
 docker tag worker-service:latest \
 588738579221.dkr.ecr.us-east-1.amazonaws.com/worker-service:latest
+
+docker tag notification-worker:latest \
+588738579221.dkr.ecr.us-east-1.amazonaws.com/notification-worker:latest
 ```
 
 ### Push to ECR
@@ -66,6 +69,9 @@ docker push \
 
 docker push \
 588738579221.dkr.ecr.us-east-1.amazonaws.com/worker-service:latest
+
+docker push \
+588738579221.dkr.ecr.us-east-1.amazonaws.com/notification-worker:latest
 ```
 
 ## Load Testing Commands

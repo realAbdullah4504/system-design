@@ -16,7 +16,7 @@ async function processMessage(message) {
     //   Math.sqrt(Math.random());
     //   messageBody.payload.iterations--;
     // }
-    await new Promise((resolve) => setTimeout(resolve, messageBody.payload.duration));
+    await new Promise((resolve) => setTimeout(resolve, messageBody.duration));
     console.log("CPU-bound task completed");
 
     console.log(

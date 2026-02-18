@@ -1,8 +1,8 @@
 config:
-  target: "http://localhost:3000"  # your API URL
+  target: "http://loadtest-balancer-619162860.us-east-1.elb.amazonaws.com"  # your API URL
   phases:
-    - duration: 600  # run for 600 seconds (10 minutes)
-      arrivalRate: 5  # 5 requests per second
+    - duration: 10  # run for 600 seconds (10 minutes)
+      arrivalRate: 1  # 5 requests per second
 
 scenarios:
   - name: "Push CPU jobs to SQS"
