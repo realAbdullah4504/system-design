@@ -1,6 +1,7 @@
 import express from "express";
 import os from "os";
 import { publishJobEvent } from "./services/sns.js";
+import "./config/mongo.js";
 const app = express();
 app.use(express.json());
 
