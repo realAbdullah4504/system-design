@@ -2,9 +2,11 @@ import express from "express";
 import { publishJobEvent } from "./services/sns.js";
 import "./config/mongo.js";
 import Event from "./models/event.js";
+import cors from "cors";
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 app.use((req, res, next) => {
   console.log(`[${process.env.HOSTNAME}] ${req.method} ${req.url}`);
@@ -32,12 +34,9 @@ app.post("/events/send", async (req, res) => {
   try {
     await publishJobEvent({ type, payload });
 
-    // 2️⃣ Optionally save immediately to DB (useful for testing)
-    const savedEvent = await Event.create({ type, payload });
 
     res.json({
       message: "Event sent successfully",
-      event: savedEvent,
     });
   } catch (err) {
     console.error(err);
