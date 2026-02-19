@@ -68,6 +68,59 @@ app.get("/health", (req, res) => {
   });
 });
 
+// SSE endpoint for real-time event updates
+app.get("/events/stream", async (req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Cache-Control"
+  });
+
+  console.log(`[SSE] Client connected to event stream`);
+
+  let lastEventTime = new Date();
+  
+  // Send initial connection message
+  res.write(`data: ${JSON.stringify({ type: "connected", timestamp: new Date().toISOString() })}\n\n`);
+
+  const pollDatabase = async () => {
+    try {
+      const events = await Event.find({
+        receivedAt: { $gt: lastEventTime }
+      }).sort({ receivedAt: -1 });
+
+      if (events.length > 0) {
+        lastEventTime = new Date(events[0].receivedAt);
+        
+        events.forEach(event => {
+          res.write(`data: ${JSON.stringify(event)}\n\n`);
+        });
+        
+        console.log(`[SSE] Sent ${events.length} new events to client`);
+      }
+    } catch (err) {
+      console.error("[SSE] Error polling database:", err);
+      res.write(`data: ${JSON.stringify({ type: "error", message: "Database polling error" })}\n\n`);
+    }
+  };
+
+  // Poll every 2 seconds
+  const pollInterval = setInterval(pollDatabase, 2000);
+
+  // Handle client disconnect
+  req.on("close", () => {
+    console.log(`[SSE] Client disconnected from event stream`);
+    clearInterval(pollInterval);
+  });
+
+  req.on("aborted", () => {
+    console.log(`[SSE] Client connection aborted`);
+    clearInterval(pollInterval);
+  });
+});
+
 app.listen(3000, () => {
   console.log("API running on port 3000");
 });
