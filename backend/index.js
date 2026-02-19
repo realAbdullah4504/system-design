@@ -1,7 +1,8 @@
 import express from "express";
-import os from "os";
 import { publishJobEvent } from "./services/sns.js";
 import "./config/mongo.js";
+import Event from "./models/event.js";
+
 const app = express();
 app.use(express.json());
 
@@ -10,31 +11,37 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/stress-cpu", async (req, res) => {
-  // Push job to SQS instead of processing here
-  const channels = ["notification", "email"];
-  const message = {
-    jobId: "test-job-id",
-    name: "test-job",
-    task: "test-job",
-    duration: 1000,
-    channels,
-    createdAt: new Date().toISOString(),
-  };
+// Endpoint to fetch all events
+app.get("/events", async (req, res) => {
+  try {
+    const events = await Event.find().sort({ createdAt: -1 });
+    res.json(events);
+  } catch (err) {
+    console.error("Error fetching events:", err);
+    res.status(500).json({ error: "Error fetching events" });
+  }
+});
+
+app.post("/events/send", async (req, res) => {
+  const { type, payload } = req.body;
+
+  if (!type || !payload) {
+    return res.status(400).json({ error: "type and payload are required" });
+  }
 
   try {
-    await publishJobEvent(message);
+    await publishJobEvent({ type, payload });
 
-    console.log(`[Producer] Sent job ${message.jobId} to SNS`);
+    // 2️⃣ Optionally save immediately to DB (useful for testing)
+    const savedEvent = await Event.create({ type, payload });
 
     res.json({
-      ok: true,
-      status: "Job submitted to queue",
-      server: os.hostname(),
+      message: "Event sent successfully",
+      event: savedEvent,
     });
   } catch (err) {
-    console.error("SNS publishJobEvent error:", err);
-    res.status(500).json({ ok: false, error: "Failed to enqueue job" });
+    console.error(err);
+    res.status(500).json({ error: "Failed to send event" });
   }
 });
 

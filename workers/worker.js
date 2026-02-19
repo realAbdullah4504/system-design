@@ -1,5 +1,7 @@
 import { receiveMessages, deleteMessage } from "./services/sqs.js";
 import { QUEUE_URL } from "./config/sqs.js";
+import "./config/mongo.js";
+import Event from "./models/event.js";
 
 // Worker function
 async function processMessage(message) {
@@ -23,10 +25,14 @@ async function processMessage(message) {
       `[Worker] Processing job ${messageBody.type}, attempt #${receiveCount}`
     );
 
+    await Event.create({
+      type: messageBody.type,
+      payload: messageBody.payload,
+    });
+
     // if (Math.random() < 0.8) throw new Error("Simulated failure");
 
     console.log(`[Worker] Job ${messageBody.type} finished successfully.`);
-
 
     await deleteMessage(QUEUE_URL, message.ReceiptHandle);
   } catch (error) {
