@@ -75,7 +75,7 @@ The goal is **progressive complexity**, ensuring each component scales safely be
 
 ### **3c – Single Queue + Single Worker , Horizontal Worker Scaling**
 
-**Objective:** Introduce background processing to scaled services and Scale multiple workers horizontally to process the same queue.
+**Objective:** Introduce background processing to scaled services and scale multiple workers horizontally to process the same queue.
 
 **Actions:**
 
@@ -97,6 +97,8 @@ The goal is **progressive complexity**, ensuring each component scales safely be
 * Observability of queue consumption performance
 * Idempotency ensures safe multi-worker processing
 
+---
+
 ### **3d – Full Cluster Orchestration**
 
 **Objective:** Multi-service, multi-queue system with fanout, monitoring, and failure recovery.
@@ -115,6 +117,60 @@ The goal is **progressive complexity**, ensuring each component scales safely be
 * Fault-tolerant job processing across services
 * Dashboards for metrics, queue depth, retries, and DLQs
 * Production-grade readiness for Stage 4
+
+---
+
+### **3e – Event-Driven Worker to API Flow (DB + SSE / Optional SNS)**
+
+**Objective:** Implement a reliable event-driven flow from workers to the API layer for real-time updates to clients, preserving loose coupling and fault tolerance.
+
+**Actions:**
+
+* Workers process jobs and **update MongoDB** as the source of truth.
+* API service exposes **SSE (Server-Sent Events)** endpoints for frontend clients (React).
+* API periodically reads database changes or subscribes to **SNS/EventBridge events** to push updates in real-time.
+* Optionally, workers can **publish events to SNS** after updating DB, which API subscribes to for instant notifications.
+* Ensure **idempotency** in workers to prevent duplicate updates.
+* Observe **latency**, **throughput**, and **error handling** between worker, DB, and API.
+
+**Why this approach?**
+
+* **Loose coupling:** Workers don’t depend on API being available.
+* **Reliability:** Job status is persisted in DB; API downtime does not lose events.
+* **Scalability:** Multiple workers can write concurrently without overwhelming API.
+* **Recoverability:** DB as source of truth allows replaying missed events.
+* **Optional real-time push:** SNS/EventBridge allows event-driven SSE without polling.
+
+**Outputs:**
+
+* Workers reliably update system state in MongoDB.
+* API pushes real-time updates to clients via SSE.
+* Optional SNS/EventBridge events provide low-latency notifications.
+* Frontend (React) receives consistent, fault-tolerant job updates.
+* Observability of event flow, latency, retries, and idempotency metrics.
+
+**Implementation Notes:**
+
+* Workers **do not directly call API** to avoid tight coupling and single point of failure.
+* SSE clients read from API, which reads DB or listens to events.
+* Idempotency ensures multi-worker writes are safe.
+* SNS/EventBridge optional but recommended for low-latency event propagation.
+* Can scale horizontally: more workers, multiple API instances behind ALB.
+
+**Metrics / Observations:**
+
+* Job processing completion time
+* Event propagation latency (DB → API → SSE)
+* Worker concurrency handling
+* SSE client update frequency and latency
+* Error rate in worker-to-DB updates and event publishing
+
+**Next Stage Triggers:**
+
+* Stage 4: production-grade event-driven architecture
+* Fully automate SSE and/or event subscriptions
+* Add distributed tracing from worker → DB → API → frontend
+* Optimize event fanout and queue management
 
 ---
 
@@ -146,6 +202,7 @@ The goal is **progressive complexity**, ensuring each component scales safely be
 * Fanout queues / Kafka for multi-service orchestration
 * Logging and metrics are added at each stage for observability
 * Retry and DLQ mechanisms integrated into worker processing
+* Workers update DB first; optional SNS/EventBridge events notify API/SSE
 * Focus on progressive complexity; each step validated before moving forward
 
 ---
@@ -160,6 +217,7 @@ The goal is **progressive complexity**, ensuring each component scales safely be
 * Fanout works for multi-service consumption
 * Retry and DLQ mechanisms operational
 * Metrics available for scaling validation
+* Event-driven worker → API flow ensures loose coupling and real-time client updates
 
 ### ⚠️ Limitations
 
@@ -193,6 +251,7 @@ The goal is **progressive complexity**, ensuring each component scales safely be
 * Retry success rates and DLQ entries
 * Multi-service job processing latency
 * CPU, memory, and network metrics
+* Event propagation latency and SSE delivery rates
 
 ---
 
