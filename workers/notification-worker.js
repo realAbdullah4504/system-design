@@ -1,5 +1,6 @@
 import { receiveMessages, deleteMessage } from "./services/sqs.js";
 import { QUEUE_URL } from "./config/notification-sqs.js";
+import { publisher } from "./config/redis.js";
 import "./config/mongo.js";
 import Event from "./models/event.js";
 
@@ -32,6 +33,8 @@ async function processMessage(message) {
       type: jobData.type || 'notification_processed',
       payload: jobData.payload,
     });
+    
+    await publisher.publish('event', JSON.stringify(jobData.payload));
 
     console.log(`[Notification Worker] Job ${jobData.type} finished successfully.`);
 

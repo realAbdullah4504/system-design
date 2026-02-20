@@ -2,6 +2,7 @@ import { receiveMessages, deleteMessage } from "./services/sqs.js";
 import { QUEUE_URL } from "./config/sqs.js";
 import "./config/mongo.js";
 import Event from "./models/event.js";
+import { publisher } from "./config/redis.js";
 
 // Worker function
 async function processMessage(message) {
@@ -35,6 +36,7 @@ async function processMessage(message) {
       type: messageBody.type,
       payload: messageBody.payload,
     });
+    await publisher.publish('event', JSON.stringify(messageBody.payload));
     console.log(`[WORKER] Event stored successfully in database`);
 
     // if (Math.random() < 0.8) throw new Error("Simulated failure");
