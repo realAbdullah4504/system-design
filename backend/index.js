@@ -74,7 +74,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-const clients = [];
+const clients = new Map();
 
 subscribeToEvents();
 listenToEvents(clients);
@@ -92,7 +92,7 @@ app.get("/events/stream", (req, res) => {
 
   const clientId = Date.now();
   const client = { id: clientId, res };
-  clients.push(client);
+  clients.set(clientId, client);
 
   // Initial handshake
   res.write(
@@ -111,8 +111,7 @@ app.get("/events/stream", (req, res) => {
   req.on("close", () => {
     console.log("[SSE] Client disconnected");
     clearInterval(heartbeat);
-    const index = clients.findIndex(c => c.id === clientId);
-    if (index !== -1) clients.splice(index, 1);
+    clients.delete(clientId);
   });
 });
 
