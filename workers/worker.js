@@ -9,8 +9,11 @@ async function processMessage(message) {
   let receiveCount = 0;
 
   try {
-    console.log(`[WORKER] Raw message received:`, JSON.stringify(message, null, 2));
-    
+    console.log(
+      `[WORKER] Raw message received:`,
+      JSON.stringify(message, null, 2)
+    );
+
     const snsMessage = JSON.parse(message.Body);
     const messageBody = JSON.parse(snsMessage.Message);
 
@@ -32,11 +35,14 @@ async function processMessage(message) {
     );
 
     console.log(`[WORKER] Storing event in database...`);
-    await Event.create({
+    const newEvent = await Event.create({
       type: messageBody.type,
       payload: messageBody.payload,
     });
-    await publisher.publish('event', JSON.stringify(messageBody.payload));
+    await publisher.publish(
+      "events",
+      JSON.stringify(newEvent.toJSON())
+    );
     console.log(`[WORKER] Event stored successfully in database`);
 
     // if (Math.random() < 0.8) throw new Error("Simulated failure");

@@ -29,12 +29,15 @@ async function processMessage(message) {
     console.log(`[Notification Worker] Processing job ${jobData.type}, attempt #${receiveCount}`);
     
     // Store event in database
-    await Event.create({
+    const newEvent = await Event.create({
       type: jobData.type || 'notification_processed',
       payload: jobData.payload,
     });
     
-    await publisher.publish('event', JSON.stringify(jobData.payload));
+    await publisher.publish(
+      "events",
+      JSON.stringify(newEvent.toJSON())
+    );
 
     console.log(`[Notification Worker] Job ${jobData.type} finished successfully.`);
 

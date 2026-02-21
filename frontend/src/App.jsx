@@ -32,6 +32,7 @@ function App() {
         } else if (data.type === "error") {
           console.error("SSE error:", data.message);
         } else {
+          console.log("SSE message:", event.data);
           // New event received from database
           setEvents(prevEvents => {
             // Check if event already exists to avoid duplicates
@@ -83,7 +84,7 @@ function App() {
       console.error("Error sending event:", err);
     }
   };
-
+console.log(events)
   return (
     <div style={{ padding: "20px" }}>
       <h1>Events</h1>
@@ -136,7 +137,7 @@ function App() {
               border: "1px solid #dee2e6"
             }}>
               <strong>{event.type}</strong>: {JSON.stringify(event.payload)} -{" "}
-              {new Date(event.receivedAt || event.createdAt).toLocaleString()}
+              {new Date(event.receivedAt || event.createdAt || event.timestamp).toLocaleString()}
             </li>
           ))}
         </ul>
