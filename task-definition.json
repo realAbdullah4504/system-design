@@ -3,7 +3,7 @@
     "containerDefinitions": [
         {
             "name": "system-design-api",
-            "image": "588738579221.dkr.ecr.us-east-1.amazonaws.com/system-design-api:d6edd5b489019dcdbe3bce1233c2b9afa7b9f92b",
+            "image": "588738579221.dkr.ecr.us-east-1.amazonaws.com/system-design-api@sha256:85eaa004fce1ddf633c3b909d5d409b0c0a1ec5741d7a247a41ed1406d20fe8b",
             "cpu": 0,
             "portMappings": [
                 {
