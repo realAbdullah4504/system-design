@@ -19,7 +19,7 @@ async function processMessage(message) {
 
     console.log(`[WORKER] Parsed message:`, messageBody);
     console.log(`[WORKER] Message ID: ${message.MessageId}`);
-    console.log(`[WORKER] Receipt Handle is: ${message.ReceiptHandle}`);
+    console.log(`[WORKER] Receipt Handle : ${message.ReceiptHandle}`);
     receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
     console.log(`[WORKER] Receive count: ${receiveCount}`);
 
