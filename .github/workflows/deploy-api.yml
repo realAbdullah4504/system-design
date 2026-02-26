@@ -3,8 +3,12 @@ name: Deploy Pipeline
 on:
   push:
     branches: [ stage-4a ]
+    paths:
+      - 'backend/**'
   pull_request:
     branches: [ stage-4a ]
+    paths:
+      - 'backend/**'
   workflow_dispatch:
 
 jobs:
