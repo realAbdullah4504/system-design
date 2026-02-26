@@ -1,5 +1,5 @@
 {
-    "taskDefinitionArn": "arn:aws:ecs:us-east-1:588738579221:task-definition/api-service-task:3",
+    "taskDefinitionArn": "arn:aws:ecs:us-east-1:588738579221:task-definition/api-service-task:8",
     "containerDefinitions": [
         {
             "name": "system-design-api",
@@ -53,10 +53,8 @@
                     "value": "arn:aws:sns:us-east-1:588738579221:loadtest-events-topic"
                 }
             ],
-            "environmentFiles": [],
             "mountPoints": [],
             "volumesFrom": [],
-            "ulimits": [],
             "logConfiguration": {
                 "logDriver": "awslogs",
                 "options": {
@@ -64,8 +62,7 @@
                     "awslogs-create-group": "true",
                     "awslogs-region": "us-east-1",
                     "awslogs-stream-prefix": "ecs"
-                },
-                "secretOptions": []
+                }
             },
             "systemControls": []
         }
@@ -73,7 +70,7 @@
     "family": "api-service-task",
     "executionRoleArn": "arn:aws:iam::588738579221:role/ecsTaskExecutionRole",
     "networkMode": "bridge",
-    "revision": 3,
+    "revision": 8,
     "volumes": [],
     "status": "ACTIVE",
     "requiresAttributes": [
@@ -96,9 +93,6 @@
             "name": "ecs.capability.execution-role-ecr-pull"
         },
         {
-            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
-        },
-        {
             "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
         }
     ],
@@ -114,7 +108,7 @@
         "EC2"
     ],
     "memory": "100",
-    "registeredAt": "2026-02-26T15:39:10.974000+05:00",
-    "registeredBy": "arn:aws:iam::588738579221:root",
+    "registeredAt": "2026-02-26T16:26:34.737000+05:00",
+    "registeredBy": "arn:aws:iam::588738579221:user/github-actions-deploy",
     "enableFaultInjection": false
 }
