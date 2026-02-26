@@ -2,9 +2,9 @@ name: Deploy Pipeline
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ stage-4a ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ stage-4a ]
   workflow_dispatch:
 
 jobs:
