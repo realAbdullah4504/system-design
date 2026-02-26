@@ -13,7 +13,7 @@ env:
   ECR_REPOSITORY: system-design-notification-worker
   ECS_SERVICE: system-design-notification-worker-service
   ECS_CLUSTER: system-design-cluster
-  ECS_TASK_DEFINITION: .aws/notification-worker-task-definition.json
+  ECS_TASK_DEFINITION: arn:aws:ecs:us-east-1:588738579221:task-definition/system-design-notification-worker-task
   CONTAINER_NAME: system-design-notification-worker
 
 permissions:
