@@ -29,8 +29,8 @@ name: Deploy to Amazon ECS
 on:
   push:
     branches: [ "stage-4a" ]
-    paths:
-      - 'backend/**'
+    # paths:
+    #   - 'backend/**'
 
 env:
   AWS_REGION: us-east-1                      # set this to your preferred AWS region, e.g. us-west-1
@@ -81,15 +81,14 @@ jobs:
 
     - name: Fill in the new image ID in the Amazon ECS task definition
       id: task-def
-      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v2
       with:
         task-definition: ${{ env.ECS_TASK_DEFINITION }}
         container-name: ${{ env.CONTAINER_NAME }}
         image: "588738579221.dkr.ecr.us-east-1.amazonaws.com/system-design-api:e17b9a2dc26841b587c23d17c0b6ed4b6fed199e"
-    
 
     - name: Deploy Amazon ECS task definition
-      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v2
       with:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
         service: ${{ env.ECS_SERVICE }}
