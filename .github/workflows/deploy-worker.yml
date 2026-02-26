@@ -9,7 +9,7 @@ on:
       - 'workers/package*.json'
 
 env:
-  AWS_REGION: ap-south-1
+  AWS_REGION: us-east-1
   ECR_REPOSITORY: system-design-worker
   ECS_SERVICE: system-design-worker-service
   ECS_CLUSTER: system-design-cluster

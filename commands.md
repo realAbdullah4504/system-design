@@ -33,6 +33,11 @@ curl -v https://sqs.us-east-1.amazonaws.com
 
 
 
+## creating ecr repository
+aws ecr create-repository --repository-name system-design-notification-worker --region ap-south-1
+
+
+
 ## Docker Commands
 
 ### Login to AWS ECR
