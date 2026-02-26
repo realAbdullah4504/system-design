@@ -68,7 +68,7 @@ app.get("/async-wait", async (req, res) => {
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "ok",
-    service: "notification-service",
+    service: "system-design-service",
     instanceId: process.env.HOSTNAME || "unknown",
     timestamp: new Date().toISOString(),
   });
