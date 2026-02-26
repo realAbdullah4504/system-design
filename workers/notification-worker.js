@@ -20,7 +20,7 @@ async function processMessage(message) {
     if (messageBody.Type === 'Notification') {
       // SNS wraps the original message
       jobData = JSON.parse(messageBody.Message);
-      console.log("[Notification Worker] Processing SNS fanout message is:", jobData);
+      console.log("[Notification Worker] Processing SNS fanout message :", jobData);
     } else {
       // Direct SQS message
       jobData = messageBody;
