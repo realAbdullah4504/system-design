@@ -36,7 +36,7 @@ async function processMessage(message) {
 
     console.log(`[WORKER] Storing event in database...`);
     const newEvent = await Event.create({
-      type: 'worker_processed',
+      type: messageBody.type,
       payload: messageBody.payload,
     });
     await publisher.publish(

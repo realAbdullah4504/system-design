@@ -39,9 +39,10 @@ app.post("/events/send", async (req, res) => {
     );
     return res.status(400).json({ error: "type and payload are required" });
   }
+
   try {
     console.log(`[BACKEND] Publishing to SNS topic: ${process.env.TOPIC_ARN}`);
-    await publishJobEvent({ type:"testing the things", payload });
+    await publishJobEvent({ type, payload });
     console.log(`[BACKEND] Successfully published to SNS - Type: ${type}`);
 
     res.json({
