@@ -30,7 +30,7 @@ async function processMessage(message) {
     
     // Store event in database
     const newEvent = await Event.create({
-      type:'notification_processed',
+      type:'notification_processedd',
       payload: jobData.payload,
     });
     
