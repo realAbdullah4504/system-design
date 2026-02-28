@@ -4,6 +4,9 @@ import "./config/mongo.js";
 import Event from "./models/event.js";
 import cors from "cors";
 import { subscribeToEvents, listenToEvents } from "./services/redis.js";
+import mongoose from "mongoose";
+import { redis, subscriber, publisher } from "./config/redis.js";
+import { snsClient } from "./config/sns.js";
 
 const app = express();
 app.use(express.json());
@@ -65,13 +68,76 @@ app.get("/async-wait", async (req, res) => {
   });
 });
 
-app.get("/health", (req, res) => {
-  res.status(200).json({
+app.get("/health", async (req, res) => {
+  const healthStatus = {
     status: "ok",
     service: "system-design-service",
     instanceId: process.env.HOSTNAME || "unknown",
     timestamp: new Date().toISOString(),
-  });
+    services: {}
+  };
+
+  try {
+    // Check MongoDB connection
+    if (mongoose.connection.readyState === 1) {
+      healthStatus.services.mongodb = { status: "connected", readyState: mongoose.connection.readyState };
+    } else {
+      healthStatus.services.mongodb = { status: "disconnected", readyState: mongoose.connection.readyState };
+      healthStatus.status = "degraded";
+    }
+
+    // Check Redis connections
+    const redisStatus = {};
+    
+    try {
+      await redis.ping();
+      redisStatus.main = { status: "connected" };
+    } catch (err) {
+      redisStatus.main = { status: "disconnected", error: err.message };
+      healthStatus.status = "degraded";
+    }
+
+    try {
+      await subscriber.ping();
+      redisStatus.subscriber = { status: "connected" };
+    } catch (err) {
+      redisStatus.subscriber = { status: "disconnected", error: err.message };
+      healthStatus.status = "degraded";
+    }
+
+    try {
+      await publisher.ping();
+      redisStatus.publisher = { status: "connected" };
+    } catch (err) {
+      redisStatus.publisher = { status: "disconnected", error: err.message };
+      healthStatus.status = "degraded";
+    }
+
+    healthStatus.services.redis = redisStatus;
+
+    // Check SNS (AWS SDK doesn't have a direct ping, so we'll check if client is initialized)
+    if (snsClient && process.env.TOPIC_ARN) {
+      healthStatus.services.sns = { 
+        status: "configured",
+        region: process.env.AWS_REGION,
+        topicArn: process.env.TOPIC_ARN ? "***" + process.env.TOPIC_ARN.split(":").pop() : "not configured"
+      };
+    } else {
+      healthStatus.services.sns = { status: "not configured" };
+      healthStatus.status = "degraded";
+    }
+
+    const statusCode = healthStatus.status === "ok" ? 200 : 503;
+    res.status(statusCode).json(healthStatus);
+
+  } catch (error) {
+    console.error("Health check error:", error);
+    res.status(503).json({
+      status: "error",
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 const clients = new Map();
