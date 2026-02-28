@@ -40,10 +40,11 @@ env:
   ECS_TASK_DEFINITION: arn:aws:ecs:us-east-1:588738579221:task-definition/api-service-task # set this to the path to your Amazon ECS task definition
                                               # file, e.g. .aws/task-definition.json
   CONTAINER_NAME: system-design-api           # set this to the name of the container in the
-                                              # containerDefinitions section of your task definition
+  API_BASE_URL: http://api-service-loadbalancer-1775317050.us-east-1.elb.amazonaws.com
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   deploy:
@@ -99,3 +100,17 @@ jobs:
         service: ${{ env.ECS_SERVICE }}
         cluster: ${{ env.ECS_CLUSTER }}
         wait-for-service-stability: true
+
+    - name: Wait for service to be ready
+      run: |
+        echo "Waiting for ECS service to be fully ready..."
+        sleep 30
+
+    - name: Run smoke tests
+      run: |
+        echo "Running smoke tests against deployed service..."
+        cd backend
+        npm run smoke-test
+      env:
+        API_BASE_URL: ${{ env.API_BASE_URL }}
+      timeout-minutes: 5
