@@ -110,6 +110,7 @@ jobs:
       run: |
         echo "Running smoke tests against deployed service..."
         cd backend
+        npm install axios
         npm run smoke-test
       env:
         API_BASE_URL: ${{ env.API_BASE_URL }}
