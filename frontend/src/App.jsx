@@ -6,7 +6,7 @@ function App() {
 
   // Fetch initial events
   const fetchEvents = () => {
-    fetch("http://54.152.117.157:3000/events")
+    fetch("http://api-service-loadbalancer-1775317050.us-east-1.elb.amazonaws.com/events")
       .then((res) => res.json())
       .then((data) => setEvents(data))
       .catch((err) => console.error(err));
@@ -16,7 +16,7 @@ function App() {
   useEffect(() => {
     fetchEvents();
 
-    const eventSource = new EventSource("http://54.152.117.157:3000/events/stream");
+    const eventSource = new EventSource("http://api-service-loadbalancer-1775317050.us-east-1.elb.amazonaws.com/events/stream");
     
     eventSource.onopen = () => {
       console.log("SSE connection opened");
@@ -61,7 +61,7 @@ function App() {
 
   const sendEvent = async () => {
     try {
-      const response = await fetch("http://54.152.117.157:3000/events/send", {
+      const response = await fetch("http://api-service-loadbalancer-1775317050.us-east-1.elb.amazonaws.com/events/send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
