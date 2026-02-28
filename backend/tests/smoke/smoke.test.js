@@ -10,8 +10,9 @@ const smokeTests = [
       if (response.status !== 200) {
         throw new Error(`Health check failed with status ${response.status}`);
       }
-      if (response.data.status !== 'ok') {
-        throw new Error(`Service status is not ok: ${response.data.status}`);
+      // Simulate failure by expecting a different status
+      if (response.data.status !== 'simulated-failure') {
+        throw new Error(`Service status check failed: expected 'simulated-failure', got '${response.data.status}'`);
       }
       console.log('✓ Health check passed');
     }

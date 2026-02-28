@@ -40,7 +40,7 @@ env:
   ECS_TASK_DEFINITION: arn:aws:ecs:us-east-1:588738579221:task-definition/api-service-task # set this to the path to your Amazon ECS task definition
                                               # file, e.g. .aws/task-definition.json
   CONTAINER_NAME: system-design-api           # set this to the name of the container in the
-  API_BASE_URL: http://api-service-loadbalancer-1775317050.us-east-1.elb.amazonaws.com
+  API_BASE_URL: http://apiservice-743766912.us-east-1.elb.amazonaws.com
 
 permissions:
   contents: read
@@ -93,6 +93,11 @@ jobs:
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build-image.outputs.image }}
 
+    - name: Get current task definition ARN before deployment
+      id: current-task-def
+      run: |
+        echo "current_task_def=$(cat task-definition.json | jq -r '.taskDefinitionArn')" >> $GITHUB_OUTPUT
+
     - name: Deploy Amazon ECS task definition
       uses: aws-actions/amazon-ecs-deploy-task-definition@v2
       with:
@@ -110,8 +115,19 @@ jobs:
       run: |
         echo "Running smoke tests against deployed service..."
         cd backend
-        npm install axios
+        npm ci
         npm run smoke-test
       env:
         API_BASE_URL: ${{ env.API_BASE_URL }}
       timeout-minutes: 5
+
+    - name: Rollback deployment on failure
+      if: failure()
+      run: |
+        echo "❌ Smoke tests failed. Rolling back deployment..."
+        aws ecs update-service \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --service ${{ env.ECS_SERVICE }} \
+          --task-definition ${{ steps.current-task-def.outputs.current_task_def }} \
+          --force-new-deployment
+        echo "🔄 Rollback initiated. Service will revert to previous task definition."
