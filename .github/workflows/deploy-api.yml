@@ -72,94 +72,94 @@ jobs:
         MONGODB_URI: mongodb+srv://abdullahjaved4504:kVuuxpFFieEbuxA5@cluster0.eyd6ho3.mongodb.net/?appName=Cluster0
         REDIS_HOST: localhost
         REDIS_PORT: 6379
-        # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_REGION: ${{ env.AWS_REGION }}
         TOPIC_ARN: ${{ env.TOPIC_ARN }}
 
   # --------------------------
   # Stage 2: Deploy
   # --------------------------
-  deploy:
-    name: Deploy
-    runs-on: ubuntu-latest
-    needs: test        # Ensures this stage runs only if "test" passes
-    environment: production
+  # deploy:
+  #   name: Deploy
+  #   runs-on: ubuntu-latest
+  #   needs: test        # Ensures this stage runs only if "test" passes
+  #   environment: production
 
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+  #   steps:
+  #   - name: Checkout
+  #     uses: actions/checkout@v4
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+  #   - name: Configure AWS credentials
+  #     uses: aws-actions/configure-aws-credentials@v1
+  #     with:
+  #       aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  #       aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  #       aws-region: ${{ env.AWS_REGION }}
 
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v1
+  #   - name: Login to Amazon ECR
+  #     id: login-ecr
+  #     uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Build, tag, and push image to Amazon ECR
-      id: build-image
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ github.sha }}
-      run: |
-        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+  #   - name: Build, tag, and push image to Amazon ECR
+  #     id: build-image
+  #     env:
+  #       ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+  #       IMAGE_TAG: ${{ github.sha }}
+  #     run: |
+  #       docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG ./backend
+  #       docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+  #       echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
-    - name: Download task definition
-      run: |
-        aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_DEFINITION }} \
-        --query taskDefinition > task-definition.json
+  #   - name: Download task definition
+  #     run: |
+  #       aws ecs describe-task-definition --task-definition ${{ env.ECS_TASK_DEFINITION }} \
+  #       --query taskDefinition > task-definition.json
 
-    - name: Fill in new image ID
-      id: task-def
-      uses: aws-actions/amazon-ecs-render-task-definition@v1
-      with:
-        task-definition: task-definition.json
-        container-name: ${{ env.CONTAINER_NAME }}
-        image: ${{ steps.build-image.outputs.image }}
+  #   - name: Fill in new image ID
+  #     id: task-def
+  #     uses: aws-actions/amazon-ecs-render-task-definition@v1
+  #     with:
+  #       task-definition: task-definition.json
+  #       container-name: ${{ env.CONTAINER_NAME }}
+  #       image: ${{ steps.build-image.outputs.image }}
 
-    - name: Get previous task definition ARN
-      id: previous-task-def
-      run: |
-        CURRENT_TASK_DEF=$(aws ecs describe-services \
-          --cluster ${{ env.ECS_CLUSTER }} \
-          --services ${{ env.ECS_SERVICE }} \
-          --query 'services[0].taskDefinition' \
-          --output text)
-        echo "previous_task_def=$CURRENT_TASK_DEF" >> $GITHUB_OUTPUT
+  #   - name: Get previous task definition ARN
+  #     id: previous-task-def
+  #     run: |
+  #       CURRENT_TASK_DEF=$(aws ecs describe-services \
+  #         --cluster ${{ env.ECS_CLUSTER }} \
+  #         --services ${{ env.ECS_SERVICE }} \
+  #         --query 'services[0].taskDefinition' \
+  #         --output text)
+  #       echo "previous_task_def=$CURRENT_TASK_DEF" >> $GITHUB_OUTPUT
 
-    - name: Deploy ECS task definition
-      uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-      with:
-        task-definition: ${{ steps.task-def.outputs.task-definition }}
-        service: ${{ env.ECS_SERVICE }}
-        cluster: ${{ env.ECS_CLUSTER }}
-        wait-for-service-stability: true
+  #   - name: Deploy ECS task definition
+  #     uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+  #     with:
+  #       task-definition: ${{ steps.task-def.outputs.task-definition }}
+  #       service: ${{ env.ECS_SERVICE }}
+  #       cluster: ${{ env.ECS_CLUSTER }}
+  #       wait-for-service-stability: true
 
-    - name: Run smoke tests
-      id: smoke
-      continue-on-error: true
-      run: |
-        cd backend
-        npm ci
-        npm run smoke-test
-      env:
-        API_BASE_URL: ${{ env.API_BASE_URL }}
-      timeout-minutes: 5
+  #   - name: Run smoke tests
+  #     id: smoke
+  #     continue-on-error: true
+  #     run: |
+  #       cd backend
+  #       npm ci
+  #       npm run smoke-test
+  #     env:
+  #       API_BASE_URL: ${{ env.API_BASE_URL }}
+  #     timeout-minutes: 5
 
-    - name: Rollback if smoke tests fail
-      if: steps.smoke.outcome == 'failure'
-      run: |
-        aws ecs update-service \
-          --cluster ${{ env.ECS_CLUSTER }} \
-          --service ${{ env.ECS_SERVICE }} \
-          --task-definition ${{ steps.previous-task-def.outputs.previous_task_def }} \
-          --force-new-deployment
-        aws ecs wait services-stable --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_SERVICE }}
-        exit 1
+  #   - name: Rollback if smoke tests fail
+  #     if: steps.smoke.outcome == 'failure'
+  #     run: |
+  #       aws ecs update-service \
+  #         --cluster ${{ env.ECS_CLUSTER }} \
+  #         --service ${{ env.ECS_SERVICE }} \
+  #         --task-definition ${{ steps.previous-task-def.outputs.previous_task_def }} \
+  #         --force-new-deployment
+  #       aws ecs wait services-stable --cluster ${{ env.ECS_CLUSTER }} --services ${{ env.ECS_SERVICE }}
+  #       exit 1
