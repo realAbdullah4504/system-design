@@ -6,7 +6,7 @@ function App() {
 
   // Fetch initial events
   const fetchEvents = () => {
-    fetch("http://api-service-loadbalancer-1775317050.us-east-1.elb.amazonaws.com/events")
+    fetch("http://localhost:3000/events")
       .then((res) => res.json())
       .then((data) => setEvents(data))
       .catch((err) => console.error(err));
@@ -16,7 +16,7 @@ function App() {
   useEffect(() => {
     fetchEvents();
 
-    const eventSource = new EventSource("http://api-service-loadbalancer-1775317050.us-east-1.elb.amazonaws.com/events/stream");
+    const eventSource = new EventSource("http://localhost:3000/events/stream");
     
     eventSource.onopen = () => {
       console.log("SSE connection opened");
@@ -61,7 +61,7 @@ function App() {
 
   const sendEvent = async () => {
     try {
-      const response = await fetch("http://api-service-loadbalancer-1775317050.us-east-1.elb.amazonaws.com/events/send", {
+      const response = await fetch("http://localhost:3000/events/send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
