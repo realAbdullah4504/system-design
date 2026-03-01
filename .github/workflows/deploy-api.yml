@@ -119,6 +119,8 @@ jobs:
         sleep 30
 
     - name: Run smoke tests
+      id: smoke
+      continue-on-error: true
       run: |
         echo "Running smoke tests against deployed service..."
         cd backend
@@ -128,13 +130,25 @@ jobs:
         API_BASE_URL: ${{ env.API_BASE_URL }}
       timeout-minutes: 5
 
-    - name: Rollback deployment on failure
-      if: failure()
+    - name: Rollback deployment on smoke test failure
+      if: steps.smoke.outcome == 'failure'
       run: |
         echo "❌ Smoke tests failed. Rolling back deployment..."
+
         aws ecs update-service \
           --cluster ${{ env.ECS_CLUSTER }} \
           --service ${{ env.ECS_SERVICE }} \
           --task-definition ${{ steps.previous-task-def.outputs.previous_task_def }} \
-          --force-new-deployment
-        echo "🔄 Rollback initiated. Service will revert to previous task definition."
+          --force-new-deployment \
+          --query "service.taskDefinition" \
+          --output text
+
+        aws ecs wait services-stable \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --services ${{ env.ECS_SERVICE }}
+
+        echo "🔄 Rollback completed."
+    
+    - name: Mark workflow failed after rollback
+      if: steps.smoke.outcome == 'failure'
+      run: exit 1
