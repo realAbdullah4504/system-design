@@ -8,6 +8,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
+  TOPIC_ARN: arn:aws:sns:us-east-1:588738579221:loadtest-events-topic
   ECR_REPOSITORY: system-design-api
   ECS_SERVICE: system-design-api-service
   ECS_CLUSTER: system-design-cluster
@@ -71,6 +72,10 @@ jobs:
         MONGODB_URI: mongodb://localhost:27017/test-integration
         REDIS_HOST: localhost
         REDIS_PORT: 6379
+        # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ env.AWS_REGION }}
+        TOPIC_ARN: ${{ env.TOPIC_ARN }}
 
   # --------------------------
   # Stage 2: Deploy
