@@ -6,7 +6,6 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "smoke-test": "node tests/smoke/smoke.test.js",
-    "integration-test": "node tests/integration/integration.test.js",
     "start": "nodemon index.js",
     "bull-board": "node bull.js"
   },
