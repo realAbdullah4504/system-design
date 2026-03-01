@@ -39,6 +39,7 @@ const integrationTests = {
   async testHealthEndpoint() {
     console.log('Testing health endpoint...');
     const response = await axios.get(`${API_BASE_URL}/health`, { timeout: 10000 });
+    throw new Error('Health check failed');
     
     if (response.status !== 200) {
       throw new Error(`Health check failed with status ${response.status}`);

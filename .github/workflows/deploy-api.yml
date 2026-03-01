@@ -113,11 +113,6 @@ jobs:
         cluster: ${{ env.ECS_CLUSTER }}
         wait-for-service-stability: true
 
-    - name: Wait for service to be ready
-      run: |
-        echo "Waiting for ECS service to be fully ready..."
-        sleep 30
-
     - name: Run smoke tests
       id: smoke
       continue-on-error: true
