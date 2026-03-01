@@ -130,10 +130,28 @@ jobs:
         API_BASE_URL: ${{ env.API_BASE_URL }}
       timeout-minutes: 5
 
-    - name: Rollback deployment on smoke test failure
-      if: steps.smoke.outcome == 'failure'
+    - name: Run integration tests
+      id: integration
+      continue-on-error: true
       run: |
-        echo "❌ Smoke tests failed. Rolling back deployment..."
+        echo "Running integration tests against deployed service..."
+        cd backend
+        npm ci
+        npm run integration-test
+      env:
+        API_BASE_URL: ${{ env.API_BASE_URL }}
+      timeout-minutes: 10
+
+    - name: Rollback deployment on test failure
+      if: steps.smoke.outcome == 'failure' || steps.integration.outcome == 'failure'
+      run: |
+        echo "❌ Tests failed. Rolling back deployment..."
+        if [ "${{ steps.smoke.outcome }}" == "failure" ]; then
+          echo "Smoke tests failed"
+        fi
+        if [ "${{ steps.integration.outcome }}" == "failure" ]; then
+          echo "Integration tests failed"
+        fi
 
         aws ecs update-service \
           --cluster ${{ env.ECS_CLUSTER }} \
@@ -150,5 +168,5 @@ jobs:
         echo "🔄 Rollback completed."
     
     - name: Mark workflow failed after rollback
-      if: steps.smoke.outcome == 'failure'
+      if: steps.smoke.outcome == 'failure' || steps.integration.outcome == 'failure'
       run: exit 1
