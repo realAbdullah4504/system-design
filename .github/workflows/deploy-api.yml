@@ -40,7 +40,7 @@ env:
   ECS_TASK_DEFINITION: arn:aws:ecs:us-east-1:588738579221:task-definition/api-service-task # set this to the path to your Amazon ECS task definition
                                               # file, e.g. .aws/task-definition.json
   CONTAINER_NAME: system-design-api           # set this to the name of the container in the
-  API_BASE_URL: http://apiservice-743766912.us-east-1.elb.amazonaws.com
+  API_BASE_URL: http://api-service-loadbalancer-909324664.us-east-1.elb.amazonaws.com
 
 permissions:
   contents: read
@@ -93,10 +93,17 @@ jobs:
           container-name: ${{ env.CONTAINER_NAME }}
           image: ${{ steps.build-image.outputs.image }}
 
-    - name: Get current task definition ARN before deployment
-      id: current-task-def
+    - name: Get previous task definition ARN before deployment
+      id: previous-task-def
       run: |
-        echo "current_task_def=$(cat task-definition.json | jq -r '.taskDefinitionArn')" >> $GITHUB_OUTPUT
+        echo "Getting current service task definition..."
+        CURRENT_TASK_DEF=$(aws ecs describe-services \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --services ${{ env.ECS_SERVICE }} \
+          --query 'services[0].taskDefinition' \
+          --output text)
+        echo "previous_task_def=$CURRENT_TASK_DEF" >> $GITHUB_OUTPUT
+        echo "Previous task definition: $CURRENT_TASK_DEF"
 
     - name: Deploy Amazon ECS task definition
       uses: aws-actions/amazon-ecs-deploy-task-definition@v2
@@ -128,6 +135,6 @@ jobs:
         aws ecs update-service \
           --cluster ${{ env.ECS_CLUSTER }} \
           --service ${{ env.ECS_SERVICE }} \
-          --task-definition ${{ steps.current-task-def.outputs.current_task_def }} \
+          --task-definition ${{ steps.previous-task-def.outputs.previous_task_def }} \
           --force-new-deployment
         echo "🔄 Rollback initiated. Service will revert to previous task definition."
