@@ -7,6 +7,7 @@ import { subscribeToEvents, listenToEvents } from "./services/redis.js";
 import mongoose from "mongoose";
 import { redis, subscriber, publisher } from "./config/redis.js";
 import { snsClient } from "./config/sns.js";
+import { httpRequestDuration, httpRequestTotal, activeConnections, getMetrics } from "./services/prom.js";
 
 const app = express();
 app.use(express.json());
@@ -15,6 +16,47 @@ app.use(cors());
 app.use((req, res, next) => {
   console.log(`[${process.env.HOSTNAME}] ${req.method} ${req.url}`);
   next();
+});
+
+// Prometheus metrics middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  
+  res.on('finish', () => {
+    const duration = (Date.now() - start) / 1000;
+    const route = req.route ? req.route.path : req.path;
+    
+    httpRequestTotal
+      .labels(req.method, route, res.statusCode.toString())
+      .inc();
+    
+    httpRequestDuration
+      .labels(req.method, route, res.statusCode.toString())
+      .observe(duration);
+  });
+  
+  next();
+});
+
+// Track active connections
+app.use((req, res, next) => {
+  activeConnections.inc();
+  res.on('finish', () => {
+    activeConnections.dec();
+  });
+  next();
+});
+
+// Prometheus metrics endpoint
+app.get('/metrics', async (req, res) => {
+  try {
+    const metrics = await getMetrics();
+    res.set('Content-Type', 'text/plain');
+    res.end(metrics);
+  } catch (error) {
+    console.error('Error generating metrics:', error);
+    res.status(500).end('Error generating metrics');
+  }
 });
 
 // Endpoint to fetch all events
