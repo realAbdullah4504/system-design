@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "test:integration": "node tests/integration/integration.test.js",
     "smoke-test": "node tests/smoke/smoke.test.js",
     "start": "nodemon index.js",
     "bull-board": "node bull.js"
