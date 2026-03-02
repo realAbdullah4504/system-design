@@ -8,13 +8,19 @@ import mongoose from "mongoose";
 import { redis, subscriber, publisher } from "./config/redis.js";
 import { snsClient } from "./config/sns.js";
 import { httpRequestDuration, httpRequestTotal, activeConnections, getMetrics } from "./services/prom.js";
+import logger from "./config/logger.js";
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
 app.use((req, res, next) => {
-  console.log(`[${process.env.HOSTNAME}] ${req.method} ${req.url}`);
+  logger.info('HTTP request', {
+    method: req.method,
+    url: req.url,
+    userAgent: req.get('User-Agent'),
+    ip: req.ip || req.connection.remoteAddress
+  });
   next();
 });
 
@@ -50,11 +56,13 @@ app.use((req, res, next) => {
 // Prometheus metrics endpoint
 app.get('/metrics', async (req, res) => {
   try {
+    logger.debug('Generating Prometheus metrics');
     const metrics = await getMetrics();
     res.set('Content-Type', 'text/plain');
     res.end(metrics);
+    logger.debug('Prometheus metrics generated successfully');
   } catch (error) {
-    console.error('Error generating metrics:', error);
+    logger.error('Error generating metrics', { error: error.message, stack: error.stack });
     res.status(500).end('Error generating metrics');
   }
 });
@@ -62,10 +70,12 @@ app.get('/metrics', async (req, res) => {
 // Endpoint to fetch all events
 app.get("/events", async (req, res) => {
   try {
+    logger.info('Fetching all events');
     const events = await Event.find().sort({ createdAt: -1 });
+    logger.info('Events fetched successfully', { count: events.length });
     res.json(events);
   } catch (err) {
-    console.error("Error fetching events:", err);
+    logger.error('Error fetching events', { error: err.message, stack: err.stack });
     res.status(500).json({ error: "Error fetching events" });
   }
 });
@@ -73,22 +83,17 @@ app.get("/events", async (req, res) => {
 app.post("/events/send", async (req, res) => {
   const { type, payload } = req.body;
 
-  console.log(
-    `[BACKEND] Received event request - Type: ${type}, Payload:`,
-    payload
-  );
+  logger.info('Received event request', { type, payload });
 
   if (!type || !payload) {
-    console.log(
-      `[BACKEND] ERROR - Missing required fields. Type: ${type}, Payload: ${payload}`
-    );
+    logger.warn('Missing required fields', { type, payload });
     return res.status(400).json({ error: "type and payload are required" });
   }
 
   try {
-    console.log(`[BACKEND] Publishing to SNS topic: ${process.env.TOPIC_ARN}`);
+    logger.info('Publishing to SNS', { topicArn: process.env.TOPIC_ARN, type });
     await publishJobEvent({ type, payload });
-    console.log(`[BACKEND] Successfully published to SNS - Type: ${type}`);
+    logger.info('Successfully published to SNS', { type });
 
     res.json({
       message: "Event sent successfully",
@@ -96,7 +101,7 @@ app.post("/events/send", async (req, res) => {
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
-    console.error(`[BACKEND] ERROR - Failed to publish to SNS:`, err);
+    logger.error('Failed to publish to SNS', { error: err.message, stack: err.stack, type });
     res.status(500).json({ error: "Failed to send event" });
   }
 });
@@ -120,6 +125,8 @@ app.get("/health", async (req, res) => {
   };
 
   try {
+    logger.debug('Starting health check');
+    
     // Check MongoDB connection
     if (mongoose.connection.readyState === 1) {
       healthStatus.services.mongodb = { status: "connected", readyState: mongoose.connection.readyState };
@@ -169,11 +176,12 @@ app.get("/health", async (req, res) => {
       healthStatus.status = "degraded";
     }
 
+    logger.info('Health check completed', { status: healthStatus.status, services: healthStatus.services });
     const statusCode = healthStatus.status === "ok" ? 200 : 503;
     res.status(statusCode).json(healthStatus);
 
   } catch (error) {
-    console.error("Health check error:", error);
+    logger.error('Health check error', { error: error.message, stack: error.stack });
     res.status(503).json({
       status: "error",
       error: error.message,
@@ -196,7 +204,7 @@ app.get("/events/stream", (req, res) => {
     "Access-Control-Allow-Headers": "Cache-Control",
   });
 
-  console.log("[SSE] Client connected");
+  logger.info('SSE client connected', { clientId });
 
   const clientId = Date.now();
   const client = { id: clientId, res };
@@ -217,7 +225,7 @@ app.get("/events/stream", (req, res) => {
   }, 25000);
 
   req.on("close", () => {
-    console.log("[SSE] Client disconnected");
+    logger.info('SSE client disconnected', { clientId });
     clearInterval(heartbeat);
     clients.delete(clientId);
   });
@@ -285,5 +293,5 @@ app.get("/events/stream", (req, res) => {
 // });
 
 app.listen(3000, () => {
-  console.log("API running on port 3000");
+  logger.info('API server started', { port: 3000, environment: process.env.NODE_ENV || 'development' });
 });
