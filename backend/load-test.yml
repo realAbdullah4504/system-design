@@ -2,7 +2,7 @@ config:
   target: "http://localhost:3000"  # your API URL
   phases:
     - duration: 60  # run for 600 seconds (10 minutes)
-      arrivalRate: 5  # 5 requests per second
+      arrivalRate: 200  # 5 requests per second
 
 scenarios:
   - name: "Async Wait"

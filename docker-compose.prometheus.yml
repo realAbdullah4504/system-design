@@ -37,6 +37,17 @@ services:
     networks:
       - prometheus-network
     restart: unless-stopped
+  
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: redis-exporter
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://default:vfGsq0AJ84EjYk4hGFpHYimF6LE6YUvG@redis-18619.c283.us-east-1-4.ec2.cloud.redislabs.com:18619
+    networks:
+      - prometheus-network
+    restart: unless-stopped
 
   grafana:
     image: grafana/grafana:latest

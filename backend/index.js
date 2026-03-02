@@ -103,7 +103,7 @@ app.post("/events/send", async (req, res) => {
 
 // Async "I/O-bound" simulation (does NOT block event loop)
 app.get("/async-wait", async (req, res) => {
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await new Promise((resolve) => setTimeout(resolve, 1200));
   res.json({
     ok: true,
     type: "Async I/O-bound",

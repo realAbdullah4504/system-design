@@ -37,6 +37,7 @@ docker-compose -f docker-compose.prometheus.yml up -d
 - **Prometheus UI**: http://localhost:9090
 - **Grafana**: http://localhost:3001 (admin/admin)
 - **Node Exporter**: http://localhost:9100/metrics
+- **Redis Exporter**: http://localhost:9121/metrics
 - **Application Metrics**: http://localhost:3000/metrics
 
 ## Available Metrics
@@ -46,6 +47,16 @@ docker-compose -f docker-compose.prometheus.yml up -d
 - `http_request_duration_seconds` - HTTP request duration histogram
 - `http_requests_total` - Total HTTP requests counter
 - `active_connections` - Current active connections gauge
+
+### Redis Metrics
+
+- `redis_connected_clients` - Number of connected clients
+- `redis_used_memory` - Memory used by Redis in bytes
+- `redis_commands_processed_total` - Total number of commands processed
+- `redis_keyspace_hits_total` - Total number of successful key lookups
+- `redis_keyspace_misses_total` - Total number of failed key lookups
+- `redis_connected_slaves` - Number of connected replicas
+- `redis_uptime_in_seconds` - Redis server uptime in seconds
 
 ### Default Prometheus Metrics
 
@@ -59,6 +70,7 @@ The `prometheus.yml` file configures:
 - Scrape interval: 15 seconds
 - Backend app scraping: Every 5 seconds from `localhost:3000/metrics`
 - Node exporter scraping: Every 5 seconds from `localhost:9100/metrics`
+- Redis exporter scraping: Every 5 seconds from `localhost:9121/metrics`
 
 ## Grafana Setup
 
@@ -85,6 +97,21 @@ histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
 active_connections
 ```
 
+### Redis Memory Usage
+```
+redis_used_memory
+```
+
+### Redis Hit Rate
+```
+rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]))
+```
+
+### Redis Commands per Second
+```
+rate(redis_commands_processed_total[5m])
+```
+
 ## Stopping the Services
 
 ```bash
@@ -96,3 +123,5 @@ docker-compose -f docker-compose.prometheus.yml down
 1. **Backend not accessible from Prometheus**: Ensure backend is running on port 3000
 2. **Metrics not showing**: Check the `/metrics` endpoint is accessible
 3. **Connection issues**: Verify Docker networking and port mappings
+4. **Redis exporter not accessible**: Ensure Redis is running and exporter can connect to Redis instance
+5. **Redis metrics missing**: Check Redis connection configuration in docker-compose file
