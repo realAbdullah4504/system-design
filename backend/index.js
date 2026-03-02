@@ -15,6 +15,7 @@ app.use(express.json());
 app.use(cors());
 
 app.use((req, res, next) => {
+  if (req.path === '/metrics') return next();
   logger.info('HTTP request', {
     method: req.method,
     url: req.url,
@@ -26,6 +27,7 @@ app.use((req, res, next) => {
 
 // Prometheus metrics middleware
 app.use((req, res, next) => {
+  if (req.path === '/metrics') return next();
   const start = Date.now();
   
   res.on('finish', () => {
