@@ -206,11 +206,11 @@ app.get("/events/stream", (req, res) => {
     "Access-Control-Allow-Headers": "Cache-Control",
   });
 
-  logger.info('SSE client connected', { clientId });
-
   const clientId = Date.now();
   const client = { id: clientId, res };
   clients.set(clientId, client);
+  logger.info('SSE client connected', { clientId });
+
 
   // Initial handshake
   res.write(
