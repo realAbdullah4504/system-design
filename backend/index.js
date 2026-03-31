@@ -1,3 +1,7 @@
+import { startTracing } from "./config/otel.js";
+
+await startTracing();
+
 import express from "express";
 import { publishJobEvent } from "./services/sns.js";
 import "./config/mongo.js";
@@ -9,6 +13,7 @@ import { redis, subscriber, publisher } from "./config/redis.js";
 import { snsClient } from "./config/sns.js";
 import { httpRequestDuration, httpRequestTotal, activeConnections, getMetrics } from "./services/prom.js";
 import logger from "./config/logger.js";
+import { context, trace, SpanStatusCode } from "@opentelemetry/api";
 
 const app = express();
 app.use(express.json());
@@ -16,12 +21,18 @@ app.use(cors());
 
 app.use((req, res, next) => {
   if (req.path === '/metrics') return next();
+
+  const span = trace.getSpan(context.active());
+  const traceId = span?.spanContext().traceId;
+
   logger.info('HTTP request', {
     method: req.method,
     url: req.url,
+    trace_id: traceId,
     userAgent: req.get('User-Agent'),
     ip: req.ip || req.connection.remoteAddress
   });
+
   next();
 });
 
@@ -83,19 +94,43 @@ app.get("/events", async (req, res) => {
 });
 
 app.post("/events/send", async (req, res) => {
+  const tracer = trace.getTracer("system-design-service");
+  
+  // Start span with proper context
+  const span = tracer.startSpan("publish-event", {
+    attributes: {
+      "http.method": "POST",
+      "http.route": "/events/send",
+      "service.name": "system-design-service"
+    }
+  });
+
+  // Set the span in context for downstream operations
+  const ctx = trace.setSpan(context.active(), span);
+
   const { type, payload } = req.body;
 
   logger.info('Received event request', { type, payload });
 
   if (!type || !payload) {
     logger.warn('Missing required fields', { type, payload });
+    span.setStatus({ code: SpanStatusCode.ERROR });
+    span.setAttributes({ "error.type": "validation_error" });
+    span.end();
     return res.status(400).json({ error: "type and payload are required" });
   }
 
   try {
-    logger.info('Publishing to SNS', { topicArn: process.env.TOPIC_ARN, type });
-    await publishJobEvent({ type, payload });
-    logger.info('Successfully published to SNS', { type });
+    // Execute within the span context
+    await context.with(ctx, async () => {
+      logger.info('Publishing to SNS', { topicArn: process.env.TOPIC_ARN, type });
+      await publishJobEvent({ type, payload });
+      logger.info('Successfully published to SNS', { type });
+    });
+
+    span.setAttribute("event.type", type);
+    span.setAttribute("event.success", true);
+    span.setStatus({ code: SpanStatusCode.OK });
 
     res.json({
       message: "Event sent successfully",
@@ -104,7 +139,17 @@ app.post("/events/send", async (req, res) => {
     });
   } catch (err) {
     logger.error('Failed to publish to SNS', { error: err.message, stack: err.stack, type });
+    
+    span.recordException(err);
+    span.setStatus({ code: SpanStatusCode.ERROR });
+    span.setAttributes({ 
+      "event.success": false,
+      "error.message": err.message 
+    });
+
     res.status(500).json({ error: "Failed to send event" });
+  } finally {
+    span.end();
   }
 });
 

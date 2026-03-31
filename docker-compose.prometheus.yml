@@ -92,6 +92,21 @@ services:
     depends_on:
       - prometheus
 
+  otel-collector:
+    image: otel/opentelemetry-collector:latest
+    container_name: otel-collector
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "13133:13133"
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml
+    command: --config=/etc/otelcol/config.yaml
+    networks:
+      - prometheus-network
+    restart: unless-stopped
+
+  
 volumes:
   prometheus_data:
   grafana_data:
