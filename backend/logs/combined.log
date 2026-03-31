@@ -135,3 +135,4 @@
 {"clientId":1774881226710,"instanceId":"Abdullah-pc","level":"info","message":"SSE client connected","service":"api-service","timestamp":"2026-03-30T14:33:46.710Z","version":"1.0.0"}
 {"count":0,"instanceId":"Abdullah-pc","level":"info","message":"Events fetched successfully","service":"api-service","timestamp":"2026-03-30T14:33:46.944Z","version":"1.0.0"}
 {"count":0,"instanceId":"Abdullah-pc","level":"info","message":"Events fetched successfully","service":"api-service","timestamp":"2026-03-30T14:33:46.969Z","version":"1.0.0"}
+{"clientId":1774881226710,"instanceId":"Abdullah-pc","level":"info","message":"SSE client disconnected","service":"api-service","timestamp":"2026-03-30T16:15:00.573Z","version":"1.0.0"}
