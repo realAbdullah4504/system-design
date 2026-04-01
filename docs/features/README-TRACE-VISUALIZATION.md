@@ -208,8 +208,8 @@ try {
 
 1. **Add custom spans** for business logic
 2. **Instrument external services** (Redis, SNS)
-3. **Configure trace storage** (Tempo, Jaeger, or other backend)
-4. **Set up trace visualization** in Grafana or other tools
+3. **✅ Configure trace storage** (Jaeger backend configured)
+4. **✅ Set up trace visualization** in Jaeger UI
 5. **Add service dependency mapping**
 
 ---
@@ -218,10 +218,11 @@ try {
 
 | URL | Purpose |
 |-----|---------|
-| http://localhost:3001 | Grafana (metrics) |
-| http://localhost:9090 | Prometheus (metrics) |
-| http://localhost:3100 | Loki (logs) |
-| http://localhost:13133 | OpenTelemetry Collector (health) |
+| <http://localhost:3001> | Grafana (metrics) |
+| <http://localhost:9090> | Prometheus (metrics) |
+| <http://localhost:3100> | Loki (logs) |
+| <http://localhost:16686> | **Jaeger (traces visualization)** |
+| <http://localhost:13133> | OpenTelemetry Collector (health) |
 
 | Command | Purpose |
 |---------|---------|
@@ -229,6 +230,7 @@ try {
 | `docker logs otel-collector -f` | Follow trace data live |
 | `curl http://localhost:13133` | Check collector health |
 | `curl http://localhost:3000/events` | Generate test traces |
+| `curl http://localhost:16686` | Access Jaeger UI |
 
 ---
 
