@@ -10,10 +10,10 @@ processors:
   batch:
 
 exporters:
-  debug:
-    verbosity: detailed
-    sampling_initial: 1
-    sampling_thereafter: 1
+  otlp:
+    endpoint: http://jaeger:4317
+    tls:
+      insecure: true
 
 extensions:
   health_check:
@@ -25,4 +25,4 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [otlp]

@@ -1,8 +1,8 @@
-# Trace Visualization Guide
+# Trace Collection Guide
 
 ## 🎯 Overview
 
-This guide shows how to visualize distributed traces using **Tempo + Grafana** in your observability stack.
+This guide shows how traces are collected in your observability stack using **OpenTelemetry Collector**. Currently, traces are being collected and exported to debug output for development and testing purposes.
 
 ---
 
@@ -16,117 +16,98 @@ docker-compose -f docker-compose.prometheus.yml up -d
 
 ### 2. Verify Services
 
-- **Tempo**: http://localhost:3200
+- **OpenTelemetry Collector**: http://localhost:13133 (health check)
 - **Grafana**: http://localhost:3001 (admin/admin)
 - **Prometheus**: http://localhost:9090
 
 ---
 
-## 🔧 Grafana Setup
+## � Current Trace Collection Setup
 
-### Add Tempo as Data Source
+### OpenTelemetry Pipeline
 
-1. Open Grafana: http://localhost:3001
-2. Go to **Configuration** → **Data Sources** → **Add data source**
-3. Select **"Tempo"**
-4. Configure:
-   - **Name**: `Tempo`
-   - **URL**: `http://tempo:3200`
-5. Click **"Save & Test"**
+```text
+Backend Service → OpenTelemetry Collector → Debug Output
+```
+
+Your backend application is instrumented with OpenTelemetry and sends traces to the collector at `http://localhost:4318/v1/traces`. The collector currently exports these traces to debug output for verification.
 
 ---
 
-## 📊 How to View Traces
+## � Viewing Trace Data
 
-### Method 1: Grafana Explore (Recommended)
+### Method 1: Collector Debug Output
 
-1. In Grafana, go to **Explore** (🔍 icon)
-2. Select **"Tempo"** from data source dropdown
-3. Click **"Search Traces"**
+```bash
+docker logs otel-collector
+```
 
-### Method 2: Direct Tempo UI
+This will show the trace data being received and processed by the collector in real-time.
 
-1. Open http://localhost:3200
-2. Use the search interface
+### Method 2: Collector Health Check
+
+Open http://localhost:13133 to verify the collector is running and view configuration details.
 
 ---
 
-## 🔍 Trace Search & Filtering
+## � What You'll See in Debug Output
 
-### Search by Service
+### Trace Information
+- **Trace ID**: Unique identifier for the request
+- **Span ID**: Unique identifier for each operation
+- **Duration**: Time taken for each operation
+- **Service Name**: "system-design-service"
+- **Operation Names**: Like "publish-event", "HTTP GET /events"
+- **Attributes**: Metadata (HTTP method, route, status, etc.)
 
+### Example Debug Output
+
+```text
+TraceID:    1234567890abcdef1234567890abcdef
+SpanID:     abcdef1234567890
+TraceFlags: 01
+Resource: attributes=[
+    service.name=system-design-service
+]
+InstrumentationLibraryName=@opentelemetry/instrumentation-express
+InstrumentationLibraryVersion=0.34.0
+Span #0
+    TraceID:     1234567890abcdef1234567890abcdef
+    SpanID:      abcdef1234567890
+    ParentSpanID:
+    SpanKind:    SpanKindSERVER
+    Name:        HTTP GET /events
+    Start:       2023-12-01 10:30:45.123 +0000 UTC
+    End:         2023-12-01 10:30:45.456 +0000 UTC
+    Attributes:  http.method=GET, http.route=/events, http.status_code=200
 ```
-service.name = "system-design-service"
-```
-
-### Search by Duration
-
-```
-duration > 100ms
-duration < 1s
-```
-
-### Search by Tags
-
-```
-http.method = "GET"
-http.status_code = 200
-```
-
-### Combined Search
-
-```
-service.name = "system-design-service" AND duration > 100ms
-```
-
----
-
-## 📈 What You'll See
-
-### Trace List View
-- **Trace ID**: Unique identifier
-- **Duration**: Total request time
-- **Number of Spans**: Operations performed
-- **Service**: Which service handled it
-- **Timestamp**: When it occurred
-
-### Span Details
-- **Operation Name**: What was done (e.g., "HTTP GET /events")
-- **Duration**: How long it took
-- **Tags**: Metadata (HTTP method, status, etc.)
-- **Logs**: Connected log entries with trace_id
-- **Parent/Child**: Relationship to other spans
-
-### Waterfall View
-- **Timeline**: Visual representation of execution
-- **Concurrency**: Parallel operations
-- **Bottlenecks**: Slow operations clearly visible
 
 ---
 
 ## 🎯 Common Use Cases
 
-### 1. Find Slow Requests
+### 1. Verify Tracing is Working
 
-```
-service.name = "system-design-service" AND duration > 500ms
-```
+Make requests to your endpoints and check collector logs:
 
-### 2. Debug Errors
+```bash
+# Make a request
+curl http://localhost:3000/events
 
-```
-http.status_code >= 400
-```
-
-### 3. Track Specific Endpoints
-
-```
-http.route = "/events/send"
+# Check collector logs
+docker logs otel-collector -f
 ```
 
-### 4. Correlate with Logs
+### 2. Monitor Specific Operations
 
-Use the **trace_id** from traces to find corresponding logs in Loki/Grafana.
+Your backend automatically creates spans for:
+- HTTP requests (Express routes)
+- SNS publishing operations
+- Database operations (if instrumented)
+
+### 3. Debug Performance Issues
+
+Look for long durations in the debug output to identify slow operations.
 
 ---
 
@@ -136,16 +117,16 @@ Use the **trace_id** from traces to find corresponding logs in Loki/Grafana.
 
 Your logs already include `trace_id` from the OpenTelemetry setup. Use it to:
 
-1. **Find trace ID in logs**
-2. **Search for that trace ID in Tempo**
-3. **See the full request context**
+1. **Find trace ID in logs**: Look for `trace_id` in log entries
+2. **Search for that trace ID**: In collector debug output
+3. **Correlate operations**: Match log timestamps with trace spans
 
 ### Metrics + Traces
 
-In Grafana, you can:
-- **Create dashboards** with both metrics and traces
-- **Jump from metrics to traces** (if configured)
-- **Correlate latency spikes** with specific traces
+While traces are currently in debug output, you can still:
+- **Monitor metrics** in Grafana (latency, error rates)
+- **Correlate metrics spikes** with trace data from collector logs
+- **Use trace IDs** from logs to investigate performance issues
 
 ---
 
@@ -154,39 +135,42 @@ In Grafana, you can:
 When you make a request to your backend:
 
 ```
-HTTP Request → Express Route → Business Logic → Redis/SNS → Response
-     ↓              ↓              ↓           ↓         ↓
-   Span 1         Span 2         Span 3     Span 4    Span 5
+HTTP Request → Express Route → Business Logic → SNS → Response
+     ↓              ↓              ↓        ↓         ↓
+   Span 1         Span 2         Span 3   Span 4    Span 5
 ```
 
-In Tempo, you'll see:
+In the collector debug output, you'll see:
 - **Total duration**: Entire request lifecycle
 - **Individual spans**: Each operation's timing
-- **Service map**: How services interact
-- **Error propagation**: Where failures occur
+- **Service information**: Service name and operation details
+- **Error information**: If any operations fail
 
 ---
 
 ## 🛠️ Troubleshooting
 
-### No Traces Appearing
+### No Traces in Collector Logs
 
 1. **Check backend is running** with OpenTelemetry
-2. **Verify collector logs**: `docker logs otel-collector`
-3. **Check Tempo logs**: `docker logs tempo`
+2. **Verify collector is running**: `docker ps | grep otel-collector`
+3. **Check collector logs**: `docker logs otel-collector`
 4. **Test data flow**: Make some HTTP requests to generate traces
+5. **Verify collector config**: Check `otel-collector-config.yaml`
 
-### Tempo Connection Issues
+### Collector Connection Issues
 
-1. **Verify network**: `docker network ls`
-2. **Check DNS**: `docker exec otel-collector nslookup tempo`
-3. **Validate config**: `docker exec otel-collector otelcol validate /etc/otelcol/config.yaml`
+1. **Check collector health**: `curl http://localhost:13133`
+2. **Verify backend config**: Check `backend/config/otel.js`
+3. **Check network**: Ensure backend can reach localhost:4318
+4. **Restart services**: `docker-compose restart otel-collector`
 
-### Grafana Data Source Issues
+### Backend Not Sending Traces
 
-1. **URL should be**: `http://tempo:3200` (not localhost)
-2. **Check Tempo is accessible**: `curl http://localhost:3200/ready`
-3. **Restart Grafana**: `docker restart grafana`
+1. **Check OpenTelemetry startup**: Look for "OpenTelemetry started" in backend logs
+2. **Verify exporter URL**: Should be `http://localhost:4318/v1/traces`
+3. **Check instrumentation**: Ensure auto-instrumentation is loaded
+4. **Restart backend**: Restart the Node.js application
 
 ---
 
@@ -224,8 +208,8 @@ try {
 
 1. **Add custom spans** for business logic
 2. **Instrument external services** (Redis, SNS)
-3. **Create Grafana dashboards** combining metrics + traces
-4. **Set up alerts** based on trace data
+3. **Configure trace storage** (Tempo, Jaeger, or other backend)
+4. **Set up trace visualization** in Grafana or other tools
 5. **Add service dependency mapping**
 
 ---
@@ -234,26 +218,26 @@ try {
 
 | URL | Purpose |
 |-----|---------|
-| http://localhost:3001 | Grafana (traces + metrics) |
-| http://localhost:3200 | Tempo (traces only) |
+| http://localhost:3001 | Grafana (metrics) |
 | http://localhost:9090 | Prometheus (metrics) |
 | http://localhost:3100 | Loki (logs) |
+| http://localhost:13133 | OpenTelemetry Collector (health) |
 
 | Command | Purpose |
 |---------|---------|
-| `docker logs otel-collector` | Check collector |
-| `docker logs tempo` | Check Tempo |
-| `docker logs grafana` | Check Grafana |
-| `curl http://localhost:3200/ready` | Test Tempo health |
+| `docker logs otel-collector` | View trace data |
+| `docker logs otel-collector -f` | Follow trace data live |
+| `curl http://localhost:13133` | Check collector health |
+| `curl http://localhost:3000/events` | Generate test traces |
 
 ---
 
 ## 💡 Pro Tips
 
-- **Start with Grafana Explore** - it's the most user-friendly
-- **Use trace IDs from logs** to jump directly to specific requests
-- **Filter by duration** to find performance issues quickly
-- **Check span attributes** for debugging context
+- **Use collector logs** to verify tracing is working
+- **Check trace IDs in logs** to correlate requests
+- **Monitor span durations** to identify performance issues
+- **Use attributes** for debugging context
 - **Combine with Loki logs** for full observability
 
 Happy tracing! 🚀
