@@ -97,16 +97,16 @@ app.post("/events/send", async (req, res) => {
   const tracer = trace.getTracer("system-design-service");
   
   // Start span with proper context
-  const span = tracer.startSpan("publish-event", {
-    attributes: {
-      "http.method": "POST",
-      "http.route": "/events/send",
-      "service.name": "system-design-service"
-    }
-  });
+  // const span = tracer.startSpan("publish-event", {
+  //   attributes: {
+  //     "http.method": "POST",
+  //     "http.route": "/events/send",
+  //     "service.name": "system-design-service"
+  //   }
+  // });
 
   // Set the span in context for downstream operations
-  const ctx = trace.setSpan(context.active(), span);
+  // const ctx = trace.setSpan(context.active(), span);
 
   const { type, payload } = req.body;
 
@@ -114,23 +114,16 @@ app.post("/events/send", async (req, res) => {
 
   if (!type || !payload) {
     logger.warn('Missing required fields', { type, payload });
-    span.setStatus({ code: SpanStatusCode.ERROR });
-    span.setAttributes({ "error.type": "validation_error" });
-    span.end();
+    // span.setStatus({ code: SpanStatusCode.ERROR });
+    // span.setAttributes({ "error.type": "validation_error" });
+    // span.end();
     return res.status(400).json({ error: "type and payload are required" });
   }
 
   try {
-    // Execute within the span context
-    await context.with(ctx, async () => {
       logger.info('Publishing to SNS', { topicArn: process.env.TOPIC_ARN, type });
       await publishJobEvent({ type, payload });
       logger.info('Successfully published to SNS', { type });
-    });
-
-    span.setAttribute("event.type", type);
-    span.setAttribute("event.success", true);
-    span.setStatus({ code: SpanStatusCode.OK });
 
     res.json({
       message: "Event sent successfully",
@@ -140,16 +133,7 @@ app.post("/events/send", async (req, res) => {
   } catch (err) {
     logger.error('Failed to publish to SNS', { error: err.message, stack: err.stack, type });
     
-    span.recordException(err);
-    span.setStatus({ code: SpanStatusCode.ERROR });
-    span.setAttributes({ 
-      "event.success": false,
-      "error.message": err.message 
-    });
-
     res.status(500).json({ error: "Failed to send event" });
-  } finally {
-    span.end();
   }
 });
 
