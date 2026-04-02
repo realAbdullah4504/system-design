@@ -13,7 +13,6 @@ import { redis, subscriber, publisher } from "./config/redis.js";
 import { snsClient } from "./config/sns.js";
 import { httpRequestDuration, httpRequestTotal, activeConnections, getMetrics } from "./services/prom.js";
 import logger from "./config/logger.js";
-import { context, trace, SpanStatusCode } from "@opentelemetry/api";
 
 const app = express();
 app.use(express.json());

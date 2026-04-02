@@ -57,7 +57,10 @@ async function processMessage(message) {
 
       await publisher.publish(
         "events",
-        JSON.stringify(newEvent)
+        JSON.stringify({
+          ...newEvent,
+          traceparent
+        })
       );
       logger.debug('Published event to Redis');
 
