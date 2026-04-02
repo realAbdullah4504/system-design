@@ -22,9 +22,6 @@ app.use(cors());
 app.use((req, res, next) => {
   if (req.path === '/metrics') return next();
 
-  // const span = trace.getSpan(context.active());
-  // const traceId = span?.spanContext().traceId;
-
   logger.info('HTTP request', {
     method: req.method,
     url: req.url,
