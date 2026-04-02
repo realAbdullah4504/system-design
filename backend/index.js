@@ -94,29 +94,12 @@ app.get("/events", async (req, res) => {
 });
 
 app.post("/events/send", async (req, res) => {
-  const tracer = trace.getTracer("system-design-service");
-  
-  // Start span with proper context
-  // const span = tracer.startSpan("publish-event", {
-  //   attributes: {
-  //     "http.method": "POST",
-  //     "http.route": "/events/send",
-  //     "service.name": "system-design-service"
-  //   }
-  // });
-
-  // Set the span in context for downstream operations
-  // const ctx = trace.setSpan(context.active(), span);
-
   const { type, payload } = req.body;
 
   logger.info('Received event request', { type, payload });
 
   if (!type || !payload) {
     logger.warn('Missing required fields', { type, payload });
-    // span.setStatus({ code: SpanStatusCode.ERROR });
-    // span.setAttributes({ "error.type": "validation_error" });
-    // span.end();
     return res.status(400).json({ error: "type and payload are required" });
   }
 

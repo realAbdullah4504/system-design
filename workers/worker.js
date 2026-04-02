@@ -1,63 +1,68 @@
 import { receiveMessages, deleteMessage } from "./services/sqs.js";
+import { startTracing } from "./config/otel.js";
+await startTracing();
+
 import { QUEUE_URL } from "./config/sqs.js";
 import "./config/mongo.js";
 import Event from "./models/event.js";
 import { publisher } from "./config/redis.js";
+import { context, propagation, trace, SpanStatusCode } from "@opentelemetry/api";
 
 // Worker function
 async function processMessage(message) {
-  let receiveCount = 0;
+  // Parse SNS message first
+  const snsMessage = JSON.parse(message.Body);
+  
+  // 1. Extract trace context from SNS message attributes
+  const traceparent = snsMessage.MessageAttributes?.traceparent?.Value;
+  
+  console.log(traceparent,"traceparent=================>");
 
-  try {
-    console.log(
-      `[WORKER] Raw message received:`,
-      JSON.stringify(message, null, 2)
-    );
+  const carrier = {
+    traceparent,
+  };
 
-    const snsMessage = JSON.parse(message.Body);
-    const messageBody = JSON.parse(snsMessage.Message);
+  const ctx = propagation.extract(context.active(), carrier);
 
-    console.log(`[WORKER] Parsed message:`, messageBody);
-    console.log(`[WORKER] Message ID: ${message.MessageId}`);
-    console.log(`[WORKER] Receipt Handle is: ${message.ReceiptHandle}`);
-    receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
-    console.log(`[WORKER] Receive count: ${receiveCount}`);
+  // 2. Create span INSIDE extracted context
+  await context.with(ctx, async () => {
+    const tracer = trace.getTracer("worker");
 
-    // while (messageBody.payload.iterations > 0) {
-    //   Math.sqrt(Math.random());
-    //   messageBody.payload.iterations--;
-    // }
-    await new Promise((resolve) => setTimeout(resolve, messageBody.duration));
-    console.log("CPU-bound task completed");
+    const span = tracer.startSpan("process-message");
+    console.log(span.spanContext().traceId,"span=================>");
 
-    console.log(
-      `[WORKER] Processing job ${messageBody.type}, attempt #${receiveCount}`
-    );
+    try {
+      const messageBody = JSON.parse(snsMessage.Message);
 
-    console.log(`[WORKER] Storing event in database...`);
-    const newEvent = await Event.create({
-      type: messageBody.type,
-      payload: messageBody.payload,
-    });
-    await publisher.publish(
-      "events",
-      JSON.stringify(newEvent.toJSON())
-    );
-    console.log(`[WORKER] Event stored successfully in database`);
+      span.setAttribute("job.type", messageBody.type);
+      span.setAttribute("sqs.message_id", message.MessageId);
 
-    // if (Math.random() < 0.8) throw new Error("Simulated failure");
+      // Simulate work
+      await new Promise((resolve) =>
+        setTimeout(resolve, messageBody.duration || 100)
+      );
 
-    console.log(`[WORKER] Job ${messageBody.type} finished successfully.`);
+      const newEvent = await Event.create({
+        type: messageBody.type,
+        payload: messageBody.payload,
+      });
 
-    console.log(`[WORKER] Deleting message from queue...`);
-    await deleteMessage(QUEUE_URL, message.ReceiptHandle);
-    console.log(`[WORKER] Message deleted successfully`);
-  } catch (error) {
-    console.error(`[WORKER] ERROR processing job:`, error.message);
-    console.error(`[WORKER] Full error:`, error);
-    console.log(`[WORKER] Message NOT deleted - will retry via SQS`);
-    // Do NOT delete → SQS will handle DLQ routing after 3rd attempt
-  }
+      await publisher.publish(
+        "events",
+        JSON.stringify(newEvent)
+      );
+
+      span.setStatus({ code: SpanStatusCode.OK });
+
+      await deleteMessage(QUEUE_URL, message.ReceiptHandle);
+    } catch (error) {
+      span.recordException(error);
+      span.setStatus({ code: SpanStatusCode.ERROR });
+      throw error;
+    } finally {
+      span.end();
+    }
+  });
 }
 
 // Polling loop

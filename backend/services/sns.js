@@ -1,14 +1,24 @@
 import { PublishCommand } from "@aws-sdk/client-sns";
 import { snsClient, TOPIC_ARN } from "../config/sns.js";
 import logger from "../config/logger.js";
+import { context, propagation } from "@opentelemetry/api";
 
 export const publishJobEvent = async (message) => {
     try {
         logger.info('Preparing to publish SNS message', { message, topicArn: TOPIC_ARN });
         
+        const carrier = {};
+        propagation.inject(context.active(), carrier);
+
         const command = new PublishCommand({
             TopicArn: TOPIC_ARN,
             Message: JSON.stringify(message),
+            MessageAttributes: carrier.traceparent ? {
+                'traceparent': {
+                    DataType: 'String',
+                    StringValue: carrier.traceparent
+                }
+            } : {}
         });
         
         const result = await snsClient.send(command);
