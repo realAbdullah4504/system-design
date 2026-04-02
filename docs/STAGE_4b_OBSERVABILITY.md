@@ -1,343 +1,420 @@
-# Stage 4b: Observability and Monitoring (Implemented)
+# Stage 4b: Observability and Monitoring Implementation Plan
 
-## Overview
+## 📌 Stage 4b Objective
 
-This document describes the **observability pieces that are implemented in this repository today**.
+Transform the current basic monitoring into a **production-grade observability system** with comprehensive metrics, structured logging, distributed tracing, and actionable alerting.
 
-Implemented capabilities:
+---
 
-- **Metrics**: Prometheus metrics exposed by the backend at `GET /metrics`.
-- **Logging**: Structured JSON logs written by the backend to `backend/logs/*.log`.
-- **Traces**: Distributed tracing with OpenTelemetry, visualized in Jaeger UI.
-- **Local observability stack**: Docker Compose stack providing Prometheus, Grafana, Loki, Promtail, Jaeger, node-exporter, redis-exporter, and OpenTelemetry Collector.
+## 🎯 Success Criteria
 
-## Architecture (Local)
+### Validation Criteria
+- All services emit structured logs with correlation IDs
+- Distributed traces cover complete request flows (API → Worker → DB → Event propagation)
+- Metrics dashboards display real-time and historical data
+- Alerts trigger appropriately for defined thresholds
+- Team can troubleshoot issues using observability tools
+- Performance SLIs are tracked against SLOs
+
+### Key Performance Indicators
+- **MTTR reduction**: < 15 minutes for critical incidents
+- **Observability coverage**: 100% of services instrumented
+- **Alert quality**: < 5% false positive rate
+- **Trace sampling**: Optimized for cost vs visibility
+
+---
+
+## 🏗️ Implementation Architecture
+
+### Observability Stack Components
 
 ```text
-backend (Express)
-  - /metrics  -> Prometheus scrape
-  - logs/*.log -> Promtail -> Loki
-  - traces     -> OpenTelemetry Collector -> Jaeger
+Services (Backend + Workers)
+├── Metrics (Prometheus)
+│   ├── Application metrics
+│   ├── Infrastructure metrics
+│   └── Business metrics
+├── Logs (Loki)
+│   ├── Structured JSON logs
+│   ├── Log aggregation
+│   └── Log retention policies
+└── Traces (Jaeger)
+    ├── Distributed tracing
+    ├── Context propagation
+    └── Trace sampling
 
-docker-compose.prometheus.yml
-  - Prometheus -> Grafana
-  - Loki <- Promtail
-  - Jaeger <- OpenTelemetry Collector
-  - node-exporter
-  - redis-exporter
+Data Flow:
+Services → Collector → Storage → Visualization
 ```
 
-## Repo Entry Points
+---
 
-- **Prometheus metrics service**: `backend/services/prom.js`
-- **Metrics middleware + endpoint**: `backend/index.js`
-- **Structured logger**: `backend/config/logger.js`
-- **OpenTelemetry configuration**: `backend/config/otel.js`
-- **Local stack**: `docker-compose.prometheus.yml`
-- **Prometheus scrape config**: `prometheus.yml`
-- **Loki + Promtail configs**:
-  - `loki-config.yml`
-  - `promtail-config.yml`
-- **OpenTelemetry Collector config**: `otel-collector-config.yaml`
+## 📋 Implementation Tasks
 
-## Metrics
+### Phase 1: Foundation (Week 1)
 
-### Backend metrics endpoint
+#### 1.1 Metrics Enhancement
+**Status**: ✅ **COMPLETED**
+- [x] Prometheus metrics endpoint in backend
+- [x] Custom application metrics (HTTP requests, duration, connections)
+- [x] Default Node.js process metrics
+- [x] Prometheus scrape configuration
 
-- **URL**: `http://localhost:3000/metrics`
-- **Implementation**:
-  - Default Node.js process metrics via `prom-client` default collectors.
-  - Custom metrics:
-    - `http_request_duration_seconds` (Histogram)
-    - `http_requests_total` (Counter)
-    - `active_connections` (Gauge)
+**Remaining Tasks**:
+- [ ] Add business metrics (job processing rates, queue depths)
+- [ ] Add worker metrics (processed jobs, failure rates)
+- [ ] Create custom metrics for SNS/SQS operations
+- [ ] Implement metrics for MongoDB operations
 
-### Prometheus scrape
+#### 1.2 Logging Infrastructure
+**Status**: ✅ **COMPLETED**
+- [x] Structured JSON logging with Winston
+- [x] Log file configuration for backend and workers
+- [x] Promtail log shipping to Loki
+- [x] Loki configuration and retention
 
-Prometheus is configured to scrape the backend via `host.docker.internal` (Docker Desktop):
+**Remaining Tasks**:
+- [ ] Implement log correlation IDs across services
+- [ ] Add error tracking and stack trace logging
+- [ ] Configure log levels per environment
+- [ ] Implement log sampling for high-volume services
 
-```yaml
-  - job_name: 'backend-app'
-    static_configs:
-      - targets: ['host.docker.internal:3000']
-    metrics_path: '/metrics'
-    scrape_interval: 5s
-```
+#### 1.3 Distributed Tracing
+**Status**: ✅ **COMPLETED**
+- [x] OpenTelemetry instrumentation in backend
+- [x] OpenTelemetry instrumentation in workers
+- [x] Trace context propagation via SNS
+- [x] Jaeger visualization setup
 
-## Logging
+**Remaining Tasks**:
+- [ ] Add manual spans for business logic
+- [ ] Implement trace sampling strategies
+- [ ] Add custom trace attributes
+- [ ] Optimize trace data collection
 
-### Backend structured logs
+### Phase 2: Advanced Features (Week 2)
 
-The backend uses Winston to emit JSON logs to:
+#### 2.1 Dashboard Creation
+**Status**: 🔄 **IN PROGRESS**
 
-- `backend/logs/combined.log`
-- `backend/logs/error.log`
+**Tasks**:
+- [ ] Create Grafana dashboards for:
+  - System Overview (CPU, Memory, Network)
+  - Application Performance (Response times, Error rates)
+  - Business Metrics (Job throughput, Queue depths)
+  - Infrastructure Health (Database, Redis, External services)
+- [ ] Configure dashboard templates and reuse
+- [ ] Set up dashboard provisioning as code
+- [ ] Create alerting panels in dashboards
 
-### Log shipping (Promtail -> Loki)
+#### 2.2 Alerting Implementation
+**Status**: ❌ **NOT STARTED**
 
-Promtail reads the backend log files mounted into the container and pushes them to Loki:
+**Tasks**:
+- [ ] Define alerting rules for:
+  - High error rates (> 5%)
+  - Increased latency (p95 > 500ms)
+  - Queue depth thresholds (> 100 items)
+  - Resource utilization (> 80% CPU/Memory)
+  - Service availability (health checks)
+- [ ] Configure Alertmanager routing
+- [ ] Set up notification channels (Email, Slack)
+- [ ] Implement alert escalation policies
+- [ ] Create on-call schedules
 
-```yaml
-  - job_name: app-logs
-    static_configs:
-      - targets:
-          - localhost
-        labels:
-          job: api-service
-          __path__: /var/log/app/*.log
-```
+#### 2.3 Trace Analysis
+**Status**: 🔄 **PARTIALLY COMPLETED**
 
-## Tracing
+**Tasks**:
+- [ ] Implement trace analytics in Jaeger
+- [ ] Create trace-based performance monitoring
+- [ ] Set up trace alerts for slow operations
+- [ ] Configure trace retention policies
+- [ ] Add trace sampling for cost optimization
 
-### Distributed Tracing Setup
+### Phase 3: Production Readiness (Week 3)
 
-The backend uses OpenTelemetry for distributed tracing with automatic instrumentation:
+#### 3.1 Monitoring as Code
+**Status**: ❌ **NOT STARTED**
 
-- **Service Name**: `system-design-service`
-- **Trace Exporter**: OTLP HTTP to OpenTelemetry Collector
-- **Collector Endpoint**: `http://localhost:4318/v1/traces`
-- **Visualization**: Jaeger UI
+**Tasks**:
+- [ ] Infrastructure as Code for monitoring stack
+- [ ] Dashboard configuration in Git
+- [ ] Alerting rules in version control
+- [ ] Automated deployment of monitoring changes
+- [ ] Monitoring stack health checks
 
-### OpenTelemetry Configuration
+#### 3.2 Performance Optimization
+**Status**: ❌ **NOT STARTED**
 
-The backend is instrumented with OpenTelemetry SDK:
+**Tasks**:
+- [ ] Optimize Prometheus scrape intervals
+- [ ] Implement metric retention policies
+- [ ] Configure log rotation and archival
+- [ ] Optimize trace sampling rates
+- [ ] Monitor monitoring stack performance
 
-```js
-// backend/config/otel.js
-import { NodeSDK } from "@opentelemetry/sdk-node";
-import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
-```
+#### 3.3 Documentation and Training
+**Status**: 🔄 **IN PROGRESS**
 
-Auto-instrumentation automatically creates spans for:
+**Tasks**:
+- [ ] Complete observability documentation
+- [ ] Create troubleshooting runbooks
+- [ ] Train team on observability tools
+- [ ] Establish incident response procedures
+- [ ] Create monitoring best practices guide
 
-- HTTP requests (Express routes)
-- Database operations (MongoDB)
-- External service calls (SNS, Redis)
+---
 
-### OpenTelemetry Collector Pipeline
+## 🔧 Technical Implementation Details
 
-```yaml
-# otel-collector-config.yaml
-receivers:
-  otlp:
-    protocols:
-      grpc:
-        endpoint: 0.0.0.0:4317
-      http:
-        endpoint: 0.0.0.0:4318
+### Metrics Implementation
 
-processors:
-  batch:
+#### Custom Application Metrics
+```javascript
+// Business metrics to add
+const jobProcessingDuration = new promClient.Histogram({
+  name: 'job_processing_duration_seconds',
+  help: 'Duration of job processing',
+  labelNames: ['job_type', 'status']
+});
 
-exporters:
-  otlp:
-    endpoint: http://jaeger:4317
-    tls:
-      insecure: true
-```
-
-### Jaeger Trace Visualization
-
-Access Jaeger UI to explore traces:
-
-- **URL**: `http://localhost:16686`
-- **Features**:
-  - Search traces by service, operation, or trace ID
-  - View span timelines and dependencies
-  - Filter by duration, status, and tags
-  - Download trace data for analysis
-
-### Trace Correlation with Logs
-
-OpenTelemetry auto-instrumentation automatically injects trace context into logs. The Winston logger is configured to capture trace IDs and other OpenTelemetry context when available.
-
-```json
-{
-  "level": "info",
-  "method": "POST",
-  "url": "/events/send",
-  "trace_id": "1234567890abcdef1234567890abcdef",
-  "span_id": "abcdef1234567890",
-  "userAgent": "curl/7.68.0",
-  "ip": "::1"
-}
-```
-
-> **Note**: Trace ID injection is handled automatically by OpenTelemetry's auto-instrumentation.
-
-### Manual Span Creation
-
-Add custom spans for business logic:
-
-```js
-import { trace } from "@opentelemetry/api";
-
-const tracer = trace.getTracer("custom-tracer");
-
-app.post("/events/send", async (req, res) => {
-  const span = tracer.startSpan("publish-event");
-  
-  try {
-    await publishJobEvent({ type, payload });
-    span.setAttribute("event.type", type);
-    span.setStatus({ code: 1 });
-    res.json({ message: "Event sent successfully" });
-  } catch (err) {
-    span.recordException(err);
-    span.setStatus({ code: 2 });
-    res.status(500).json({ error: "Failed to send event" });
-  } finally {
-    span.end();
-  }
+const queueDepth = new promClient.Gauge({
+  name: 'queue_depth',
+  help: 'Current queue depth',
+  labelNames: ['queue_name']
 });
 ```
 
-## Local Setup
+#### Infrastructure Metrics
+- Node.js process metrics (memory, CPU)
+- Database connection pool metrics
+- Redis connection metrics
+- External service call metrics
 
-### 1) Run the backend
+### Logging Enhancement
 
-From the `backend` folder:
-
-```bash
-npm install
-npm start
+#### Structured Log Format
+```javascript
+// Enhanced log structure
+{
+  "timestamp": "2024-01-01T00:00:00.000Z",
+  "level": "info",
+  "service": "backend",
+  "trace_id": "abc123",
+  "span_id": "def456",
+  "correlation_id": "xyz789",
+  "method": "POST",
+  "route": "/events/send",
+  "status_code": 200,
+  "duration_ms": 150,
+  "user_id": "user123",
+  "event_type": "job.created",
+  "message": "Event processed successfully"
+}
 ```
 
-Verify metrics:
+#### Log Correlation
+- Automatic trace ID injection
+- Request ID propagation
+- User context tracking
+- Business event correlation
 
-```bash
-curl http://localhost:3000/metrics
+### Tracing Enhancement
+
+#### Manual Spans
+```javascript
+// Business logic spans
+const span = tracer.startSpan('process-job', {
+  attributes: {
+    'job.type': jobType,
+    'job.id': jobId,
+    'user.id': userId
+  }
+});
+
+try {
+  // Business logic
+  span.setStatus({ code: SpanStatusCode.OK });
+} catch (error) {
+  span.recordException(error);
+  span.setStatus({ code: SpanStatusCode.ERROR });
+} finally {
+  span.end();
+}
 ```
 
-### 2) Start the observability stack
+#### Trace Sampling
+- Probabilistic sampling for production
+- Fixed rate sampling for testing
+- Custom sampling based on operation importance
+- Cost-effective trace retention
 
-From repo root:
+---
 
-```bash
-docker-compose -f docker-compose.prometheus.yml up -d
+## 📊 Monitoring Stack Configuration
+
+### Prometheus Configuration
+```yaml
+# Enhanced scrape configs
+scrape_configs:
+  - job_name: 'backend'
+    static_configs:
+      - targets: ['backend:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    
+  - job_name: 'workers'
+    static_configs:
+      - targets: ['workers:3001']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    
+  - job_name: 'infrastructure'
+    static_configs:
+      - targets: ['node-exporter:9100', 'redis-exporter:9121']
 ```
 
-### 3) Access UIs
+### Grafana Dashboard Provisioning
+```yaml
+# dashboard-provisioning.yml
+apiVersion: 1
 
-- **Prometheus**: `http://localhost:9090`
-- **Grafana**: `http://localhost:3001` (admin/admin)
-- **Jaeger**: `http://localhost:16686`
-- **Loki**: `http://localhost:3100`
-
-### 4) Generate Test Traces
-
-```bash
-# Generate HTTP request traces
-curl http://localhost:3000/events
-curl -X POST http://localhost:3000/events/send \
-  -H "Content-Type: application/json" \
-  -d '{"type":"test","payload":{"message":"hello"}}'
+providers:
+  - name: 'default'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
 ```
 
-### 5) View Traces in Jaeger
+### Alertmanager Configuration
+```yaml
+# alertmanager.yml
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@company.com'
 
-1. Open `http://localhost:16686`
-2. Select Service: `system-design-service`
-3. Click "Find Traces" to see recent requests
-4. Click on any trace to view detailed span information
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'web.hook'
 
-## Useful Prometheus Queries
-
-```promql
-rate(http_requests_total[5m])
+receivers:
+  - name: 'web.hook'
+    email_configs:
+      - to: 'team@company.com'
+        subject: '[Alert] {{ .GroupLabels.alertname }}'
 ```
 
-```promql
-histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+---
+
+## 🚨 Alerting Strategy
+
+### Alert Hierarchy
+1. **Critical** (Immediate action required)
+   - Service down
+   - High error rates (> 10%)
+   - Security incidents
+
+2. **Warning** (Investigate within hour)
+   - Increased latency
+   - Resource utilization > 80%
+   - Queue depth increasing
+
+3. **Info** (Monitor trend)
+   - Metric anomalies
+   - Performance degradation
+   - Capacity planning alerts
+
+### Alerting Rules
+```yaml
+# Prometheus alerting rules
+groups:
+  - name: application.rules
+    rules:
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status_code=~"5.."}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors per second"
 ```
 
-```promql
-active_connections
-```
+---
 
-## Trace Analysis
+## 📈 Success Metrics and KPIs
 
-### Common Trace Patterns
+### Observability KPIs
+- **Mean Time to Detection (MTTD)**: < 5 minutes
+- **Mean Time to Resolution (MTTR)**: < 15 minutes
+- **Alert Coverage**: 100% of critical services
+- **False Positive Rate**: < 5%
+- **Dashboard Usage**: 80% of team uses dashboards weekly
 
-#### HTTP Request Flow
+### Technical Metrics
+- **Metric Collection Latency**: < 30 seconds
+- **Log Ingestion Rate**: > 1000 logs/second
+- **Trace Collection Rate**: > 100 traces/second
+- **Storage Utilization**: < 80% of allocated space
+- **Query Performance**: < 2 seconds for dashboard loads
 
-```text
-HTTP GET /events
-├── Express Route Handler
-├── MongoDB Query (Event.find())
-└── Response
-```
+---
 
-#### Event Publishing Flow
+## 🔄 Ongoing Operations
 
-```text
-HTTP POST /events/send
-├── Express Route Handler
-├── SNS Publish
-└── Response
-```
+### Daily Tasks
+- Review dashboards for anomalies
+- Check alerting system health
+- Monitor storage capacity
+- Verify data collection
 
-### Performance Investigation
+### Weekly Tasks
+- Review alerting rules effectiveness
+- Update dashboards based on feedback
+- Analyze performance trends
+- Optimize monitoring costs
 
-1. **Identify Slow Requests**
-   - In Jaeger: Sort by duration
-   - Look for traces with high total duration
+### Monthly Tasks
+- Review and update SLI/SLO targets
+- Audit monitoring configurations
+- Update documentation
+- Team training sessions
 
-2. **Pinpoint Bottlenecks**
-   - Click on trace to view span timeline
-   - Identify longest spans (red/orange in timeline)
+---
 
-3. **Correlate with Logs**
-   - Copy Trace ID from Jaeger
-   - Search in Loki for that trace_id
-   - Analyze error messages and context
+## 🎯 Next Steps After Stage 4b
 
-### Troubleshooting Traces
+Once Stage 4b is complete, the system will have:
+- Full observability across all services
+- Production-ready monitoring stack
+- Effective alerting and incident response
+- Cost-optimized monitoring solution
 
-#### No Traces in Jaeger
+This foundation enables:
+- **Stage 4c**: Secrets Management
+- **Stage 4d**: Reliability Patterns (Circuit Breakers)
+- **Stage 4e**: Multi-Service Orchestration
+- **Stage 4f**: Cost Optimization & Auto-Scaling
 
-1. **Check backend is running** with OpenTelemetry
-2. **Verify collector is running**: `docker ps | grep otel-collector`
-3. **Check collector health**: `curl http://localhost:13133`
-4. **Test with requests**: Make HTTP requests to generate traces
+---
 
-#### Missing Trace IDs in Logs
+## 📝 Implementation Timeline
 
-OpenTelemetry auto-instrumentation should automatically inject trace context. If you're not seeing trace IDs in logs:
+| Week | Focus | Deliverables |
+|------|-------|--------------|
+| 1 | Foundation | Enhanced metrics, logging, tracing |
+| 2 | Advanced Features | Dashboards, alerting, trace analysis |
+| 3 | Production Readiness | Monitoring as code, optimization, docs |
 
-1. **Check OpenTelemetry is running**: Look for "OpenTelemetry started" in backend logs
-2. **Verify auto-instrumentation**: Ensure requests are generating traces in Jaeger
-3. **Check logger configuration**: Winston should capture OpenTelemetry context automatically
-4. **Test with requests**: Make HTTP requests to generate traces and logs
-
-If trace IDs are still missing, verify the OpenTelemetry initialization happens before any other imports.
-
-## Integration Workflow
-
-### Complete Observability Flow
-
-1. **Metrics Alert** → High latency detected in Grafana
-2. **Trace Investigation** → Find slow requests in Jaeger
-3. **Log Analysis** → Search trace_id in Loki for root cause
-4. **Resolution** → Fix identified bottleneck
-
-### Example: Debugging Slow Event Publishing
-
-```bash
-# 1. Check metrics for high latency
-# In Grafana: Look for high p95 latency
-
-# 2. Find slow traces
-# In Jaeger: Filter by operation "POST /events/send"
-# Sort by duration
-
-# 3. Get trace ID
-# Copy trace ID from slow trace (e.g., "1234567890abcdef")
-
-# 4. Search logs
-# In Loki/Grafana: Search for trace_id="1234567890abcdef"
-
-# 5. Analyze root cause
-# Look for SNS timeouts, DB connection issues, etc.
-```
+**Total Duration**: 3 weeks
+**Team Size**: 2-3 engineers
+**Dependencies**: Stage 3 horizontal scaling complete
