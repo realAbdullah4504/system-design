@@ -1,5 +1,5 @@
 import { createLogger } from './logger-base.js';
 
-const logger = createLogger('api-service');
+const logger = createLogger('notification-worker-service');
 
 export default logger;

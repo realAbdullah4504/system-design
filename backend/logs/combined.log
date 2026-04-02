@@ -954,3 +954,7 @@
 {"instanceId":"Abdullah-pc","level":"info","message":"Successfully published to SNS","service":"api-service","span_id":"e1182d5b296ee7e9","timestamp":"2026-04-02T06:21:12.706Z","trace_flags":"01","trace_id":"262aa9c5f9df1e9e12f22f9ad06c6e76","type":"worker","version":"1.0.0"}
 {"channel":"events","clientCount":0,"instanceId":"Abdullah-pc","level":"info","message":"Broadcasting message to SSE clients [object Object]","service":"api-service","timestamp":"2026-04-02T06:21:13.361Z","version":"1.0.0"}
 {"channel":"events","clientCount":0,"instanceId":"Abdullah-pc","level":"info","message":"Broadcasting message to SSE clients [object Object]","service":"api-service","timestamp":"2026-04-02T06:21:13.394Z","version":"1.0.0"}
+{"environment":"development","instanceId":"Abdullah-pc","level":"info","message":"API server started","port":3000,"service":"api-service","timestamp":"2026-04-02T06:42:27.156Z","version":"1.0.0"}
+{"channel":"events","instanceId":"Abdullah-pc","level":"info","message":"Redis subscription message received","service":"api-service","timestamp":"2026-04-02T06:42:28.291Z","version":"1.0.0"}
+{"environment":"development","instanceId":"Abdullah-pc","level":"info","message":"API server started","port":3000,"service":"api-service","timestamp":"I4O8601","version":"1.0.0"}
+{"channel":"events","environment":"development","instanceId":"Abdullah-pc","level":"info","message":"Redis subscription message received","service":"api-service","timestamp":"I8O8601","version":"1.0.0"}
