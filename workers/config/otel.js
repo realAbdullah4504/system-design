@@ -5,6 +5,14 @@ import pkg from '@opentelemetry/resources';
 const { Resource } = pkg;
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 
+// Get all instrumentations except MongoDB
+const instrumentations = getNodeAutoInstrumentations({
+  // Disable MongoDB instrumentation to avoid Mongoose conflicts
+  '@opentelemetry/instrumentation-mongodb': {
+    enabled: false
+  }
+});
+
 const sdk = new NodeSDK({
   resource: new Resource({
     [SemanticResourceAttributes.SERVICE_NAME]: "worker-service",
@@ -12,7 +20,7 @@ const sdk = new NodeSDK({
   traceExporter: new OTLPTraceExporter({
     url: "http://localhost:4318/v1/traces", // Collector endpoint
   }),
-  instrumentations: [getNodeAutoInstrumentations()],
+  instrumentations,
 });
 
 export const startTracing = async () => {

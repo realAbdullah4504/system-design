@@ -10,13 +10,15 @@ import { context, propagation, trace, SpanStatusCode } from "@opentelemetry/api"
 
 // Worker function
 async function processMessage(message) {
+  console.log(`[WORKER] Processing message ${message.MessageId}`);
+  
   // Parse SNS message first
   const snsMessage = JSON.parse(message.Body);
   
   // 1. Extract trace context from SNS message attributes
   const traceparent = snsMessage.MessageAttributes?.traceparent?.Value;
   
-  console.log(traceparent,"traceparent=================>");
+  console.log(`[WORKER] Trace context: ${traceparent ? 'present' : 'missing'}`);
 
   const carrier = {
     traceparent,
@@ -29,38 +31,46 @@ async function processMessage(message) {
     const tracer = trace.getTracer("worker");
 
     const span = tracer.startSpan("process-message");
-    console.log(span.spanContext().traceId,"span=================>");
+    console.log(`[WORKER] Started span with trace ID: ${span.spanContext().traceId}`);
 
     try {
       const messageBody = JSON.parse(snsMessage.Message);
+      console.log(`[WORKER] Parsed message body:`, { type: messageBody.type, hasPayload: !!messageBody.payload });
 
       span.setAttribute("job.type", messageBody.type);
       span.setAttribute("sqs.message_id", message.MessageId);
 
       // Simulate work
+      console.log(`[WORKER] Simulating work for ${messageBody.duration || 100}ms`);
       await new Promise((resolve) =>
         setTimeout(resolve, messageBody.duration || 100)
       );
 
+      console.log(`[WORKER] Creating event in database`);
       const newEvent = await Event.create({
         type: messageBody.type,
         payload: messageBody.payload,
       });
+      console.log(`[WORKER] Event created with ID: ${newEvent._id}`);
 
       await publisher.publish(
         "events",
         JSON.stringify(newEvent)
       );
+      console.log(`[WORKER] Published event to Redis`);
 
       span.setStatus({ code: SpanStatusCode.OK });
+      console.log(`[WORKER] Successfully processed message ${message.MessageId}`);
 
       await deleteMessage(QUEUE_URL, message.ReceiptHandle);
     } catch (error) {
+      console.error(`[WORKER] Error processing message ${message.MessageId}:`, error);
       span.recordException(error);
       span.setStatus({ code: SpanStatusCode.ERROR });
       throw error;
     } finally {
       span.end();
+      console.log(`[WORKER] Span ended for message ${message.MessageId}`);
     }
   });
 }
@@ -79,9 +89,11 @@ async function pollQueue() {
         console.log(`[WORKER] No messages available`);
       }
     } catch (err) {
-      console.error("[WORKER] Error receiving messages:", err);
+      console.error("[WORKER] Error receiving messages:", err.message);
       console.error("[WORKER] Full error:", err);
     }
   }
 }
+
+console.log("[WORKER] Starting worker...");
 pollQueue();
