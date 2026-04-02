@@ -1,6 +1,7 @@
 import { receiveMessages, deleteMessage } from "./services/sqs.js";
-import { startTracing } from "./config/otel.js";
-await startTracing();
+import { createTracingSDK } from "./config/otel.js";
+const sdk = createTracingSDK("worker-service");
+await sdk.start();
 
 import { QUEUE_URL } from "./config/sqs.js";
 import "./config/mongo.js";
@@ -64,10 +65,13 @@ async function processMessage(message) {
 
       await deleteMessage(QUEUE_URL, message.ReceiptHandle);
     } catch (error) {
-      console.error(`[WORKER] Error processing message ${message.MessageId}:`, error);
+      console.error(`[WORKER] Error processing message ${message.MessageId}:`, {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       span.recordException(error);
       span.setStatus({ code: SpanStatusCode.ERROR });
-      throw error;
     } finally {
       span.end();
       console.log(`[WORKER] Span ended for message ${message.MessageId}`);
@@ -84,7 +88,18 @@ async function pollQueue() {
 
       if (data.Messages && data.Messages.length > 0) {
         console.log(`[WORKER] Received ${data.Messages.length} messages`);
-        await Promise.all(data.Messages.map(processMessage));
+        await Promise.all(data.Messages.map(async (message) => {
+          try {
+            await processMessage(message);
+          } catch (error) {
+            console.error(`[WORKER] Failed to process message ${message.MessageId}:`, {
+              message: error.message,
+              stack: error.stack,
+              name: error.name
+            });
+            // Continue processing other messages
+          }
+        }));
       } else {
         console.log(`[WORKER] No messages available`);
       }

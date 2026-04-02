@@ -13,15 +13,21 @@ const instrumentations = getNodeAutoInstrumentations({
   }
 });
 
-const sdk = new NodeSDK({
-  resource: new Resource({
-    [SemanticResourceAttributes.SERVICE_NAME]: "worker-service",
-  }),
-  traceExporter: new OTLPTraceExporter({
-    url: "http://localhost:4318/v1/traces", // Collector endpoint
-  }),
-  instrumentations,
-});
+// Create SDK factory function to allow different service names
+export const createTracingSDK = (serviceName) => {
+  return new NodeSDK({
+    resource: new Resource({
+      [SemanticResourceAttributes.SERVICE_NAME]: serviceName,
+    }),
+    traceExporter: new OTLPTraceExporter({
+      url: "http://localhost:4318/v1/traces", // Collector endpoint
+    }),
+    instrumentations,
+  });
+};
+
+// Default for main worker
+const sdk = createTracingSDK("worker-service");
 
 export const startTracing = async () => {
   await sdk.start();
