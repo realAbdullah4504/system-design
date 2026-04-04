@@ -136,7 +136,7 @@ async function processMessage(message) {
       });
       
       // Record job failure
-      recordJobFailure(jobTimer, WORKER_TYPE, messageBody?.type || 'unknown', error.name);
+      recordJobFailure(jobTimer, WORKER_TYPE, 'unknown', error.name);
       
       // Enhanced error recording
       span.recordException(error);
