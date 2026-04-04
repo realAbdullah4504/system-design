@@ -9,11 +9,47 @@ import Event from "./models/event.js";
 import { publisher } from "./config/redis.js";
 import logger from "./config/logger.js";
 import { context, propagation, trace, SpanStatusCode } from "@opentelemetry/api";
+import {
+  recordJobStart,
+  recordJobSuccess,
+  recordJobFailure,
+  updateMemoryUsage,
+  setWorkerHealth,
+  recordException,
+  recordDatabaseError,
+  recordRedisError,
+  recordSQSError,
+  workerUptime,
+  queueDepth
+} from "./services/prom.js";
+import "./metrics-server.js";
+
+// Worker type identifier
+const WORKER_TYPE = "main-worker";
+
+// Track worker start time
+const workerStartTime = Date.now();
+
+// Set initial worker health
+setWorkerHealth(WORKER_TYPE, true);
+
+// Update uptime metric
+workerUptime.labels(WORKER_TYPE).set(0);
+
+// Periodically update metrics
+setInterval(() => {
+  const uptime = (Date.now() - workerStartTime) / 1000;
+  workerUptime.labels(WORKER_TYPE).set(uptime);
+  updateMemoryUsage(WORKER_TYPE);
+}, 10000); // Update every 10 seconds
 
 // Worker function
 async function processMessage(message) {
   const receiveCount = Number.parseInt(message.Attributes?.ApproximateReceiveCount || '1');
   const maxRetries = 3;
+  
+  // Start job timing
+  const jobTimer = recordJobStart(WORKER_TYPE, 'unknown');
   
   logger.info('Processing message', { 
     messageId: message.MessageId,
@@ -55,6 +91,8 @@ async function processMessage(message) {
       const messageBody = JSON.parse(snsMessage.Message);
       logger.debug('Parsed message body', { type: messageBody.type, hasPayload: !!messageBody.payload });
 
+      // Update job timer with actual job type
+      jobTimer({ job_type: messageBody.type });
       span.setAttribute("job.type", messageBody.type);
       span.setAttribute("sqs.message_id", message.MessageId);
 
@@ -83,6 +121,9 @@ async function processMessage(message) {
       span.setStatus({ code: SpanStatusCode.OK });
       logger.info('Successfully processed message', { messageId: message.MessageId });
 
+      // Record job success
+      recordJobSuccess(jobTimer, WORKER_TYPE, messageBody.type);
+
       await deleteMessage(QUEUE_URL, message.ReceiptHandle);
     } catch (error) {
       logger.error('Error processing message', { 
@@ -93,6 +134,9 @@ async function processMessage(message) {
         queueUrl: QUEUE_URL,
         queueArn: process.env.SQS_QUEUE_ARN || 'unknown'
       });
+      
+      // Record job failure
+      recordJobFailure(jobTimer, WORKER_TYPE, messageBody?.type || 'unknown', error.name);
       
       // Enhanced error recording
       span.recordException(error);
@@ -144,6 +188,11 @@ async function pollQueue() {
       logger.debug('Polling queue', { queueUrl: QUEUE_URL });
       const data = await receiveMessages(QUEUE_URL);
 
+      // Update queue depth metric
+      if (data.Messages) {
+        queueDepth.labels(WORKER_TYPE, QUEUE_URL).set(data.Messages.length);
+      }
+
       if (data.Messages && data.Messages.length > 0) {
         logger.info('Received messages', { count: data.Messages.length });
         await Promise.all(data.Messages.map(async (message) => {
@@ -156,15 +205,20 @@ async function pollQueue() {
               stack: error.stack,
               name: error.name
             });
+            // Record processing exception
+            recordException(WORKER_TYPE, 'processing_error');
             // Continue processing other messages
           }
         }));
       } else {
         logger.debug('No messages available');
+        queueDepth.labels(WORKER_TYPE, QUEUE_URL).set(0);
       }
     } catch (err) {
       logger.error('Error receiving messages', { error: err.message });
       logger.error('Full error', { error: err });
+      // Record SQS error
+      recordSQSError(WORKER_TYPE, 'receive_messages', err.name);
     }
   }
 }
