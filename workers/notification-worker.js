@@ -19,7 +19,7 @@ import {
 
 // Worker function
 async function processMessage(message) {
-  const receiveCount = parseInt(message.Attributes?.ApproximateReceiveCount || '1');
+  const receiveCount = Number.parseInt(message.Attributes?.ApproximateReceiveCount || '1');
   const maxRetries = 3;
   
   logger.info('Processing message', { 
