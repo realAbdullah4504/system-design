@@ -12,7 +12,16 @@ import { context, propagation, trace, SpanStatusCode } from "@opentelemetry/api"
 
 // Worker function
 async function processMessage(message) {
-  logger.info('Processing message', { messageId: message.MessageId });
+  const receiveCount = parseInt(message.Attributes?.ApproximateReceiveCount || '1');
+  const maxRetries = 3;
+  
+  logger.info('Processing message', { 
+    messageId: message.MessageId,
+    attempt: receiveCount,
+    maxRetries,
+    queueUrl: QUEUE_URL,
+    queueArn: process.env.SQS_QUEUE_ARN || 'unknown'
+  });
   
   // Parse SNS message first
   const snsMessage = JSON.parse(message.Body);
@@ -33,6 +42,13 @@ async function processMessage(message) {
     const tracer = trace.getTracer("worker");
 
     const span = tracer.startSpan("process-message");
+    // Add retry attributes to span
+    span.setAttribute("message.attempt", receiveCount);
+    span.setAttribute("message.max_retries", maxRetries);
+    span.setAttribute("message.will_retry", receiveCount < maxRetries);
+    span.setAttribute("sqs.queue_url", QUEUE_URL);
+    span.setAttribute("sqs.queue_arn", process.env.SQS_QUEUE_ARN || 'unknown');
+    
     logger.debug('Started span', { traceId: span.spanContext().traceId });
 
     try {
@@ -73,10 +89,47 @@ async function processMessage(message) {
         messageId: message.MessageId,
         error: error.message, 
         stack: error.stack,
-        name: error.name
+        name: error.name,
+        queueUrl: QUEUE_URL,
+        queueArn: process.env.SQS_QUEUE_ARN || 'unknown'
       });
+      
+      // Enhanced error recording
       span.recordException(error);
-      span.setStatus({ code: SpanStatusCode.ERROR });
+      span.setStatus({ 
+        code: SpanStatusCode.ERROR,
+        message: error.message 
+      });
+      
+      // Add explicit error attributes
+      span.setAttribute('error.type', error.name);
+      span.setAttribute('error.message', error.message);
+      span.setAttribute('error.stack', error.stack);
+      span.setAttribute('error.occurred', true);
+      span.setAttribute('message.attempt', receiveCount);
+      span.setAttribute('sqs.queue_url', QUEUE_URL);
+      span.setAttribute('sqs.queue_arn', process.env.SQS_QUEUE_ARN || 'unknown');
+      
+      // Log retry warning for attempts 1-2, error for attempt 3+
+      if (receiveCount < 3) {
+        span.setAttribute('message.will_retry', true);
+        logger.warn('Message will be retried by SQS', {
+          messageId: message.MessageId,
+          attempt: receiveCount,
+          queueUrl: QUEUE_URL,
+          queueArn: process.env.SQS_QUEUE_ARN || 'unknown'
+        });
+      } else {
+        span.setAttribute('message.final_failure', true);
+        logger.error('Message moving to DLQ after max retries', {
+          messageId: message.MessageId,
+          attempt: receiveCount,
+          queueUrl: QUEUE_URL,
+          queueArn: process.env.SQS_QUEUE_ARN || 'unknown'
+        });
+      }
+      
+      // Don't delete message - SQS handles retries and DLQ automatically
     } finally {
       span.end();
       logger.debug('Span ended', { messageId: message.MessageId });

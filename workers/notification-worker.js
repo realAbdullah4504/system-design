@@ -10,20 +10,32 @@ import { publisher } from "./config/redis.js";
 import "./config/mongo.js";
 import Event from "./models/event.js";
 import logger from "./config/notification-logger.js";
-import { context, propagation, trace, SpanStatusCode } from "@opentelemetry/api";
+import {
+  context,
+  propagation,
+  trace,
+  SpanStatusCode,
+} from "@opentelemetry/api";
 
 // Worker function
 async function processMessage(message) {
-  logger.info('Processing message', { messageId: message.MessageId });
+  const receiveCount = parseInt(message.Attributes?.ApproximateReceiveCount || '1');
+  const maxRetries = 3;
   
-  let receiveCount = 0;
+  logger.info('Processing message', { 
+    messageId: message.MessageId,
+    attempt: receiveCount,
+    maxRetries,
+    queueUrl: QUEUE_URL,
+    queueArn: process.env.SQS_QUEUE_ARN || 'unknown'
+  });
 
   try {
     const snsMessage = JSON.parse(message.Body);
-    
+
     // 1. Extract trace context from SNS message attributes
     const traceparent = snsMessage.MessageAttributes?.traceparent?.Value;
-    logger.debug('Trace context', { present: !!traceparent });
+    logger.debug("Trace context", { present: !!traceparent });
 
     const carrier = {
       traceparent,
@@ -35,63 +47,129 @@ async function processMessage(message) {
     await context.with(ctx, async () => {
       const tracer = trace.getTracer("notification-worker");
       const span = tracer.startSpan("process-notification-message");
+      // Add retry attributes to span
+      span.setAttribute("message.attempt", receiveCount);
+      span.setAttribute("message.max_retries", maxRetries);
+      span.setAttribute("message.will_retry", receiveCount < maxRetries);
+      span.setAttribute("sqs.queue_url", QUEUE_URL);
+      span.setAttribute("sqs.queue_arn", process.env.SQS_QUEUE_ARN || 'unknown');
+      
       logger.debug('Started span', { traceId: span.spanContext().traceId });
 
       try {
         const messageBody = JSON.parse(snsMessage.Message);
-        logger.debug('Parsed message body', { type: messageBody.type, hasPayload: !!messageBody.payload });
-
-        receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
-        logger.debug('Receive count', { receiveCount });
+        logger.debug("Parsed message body", {
+          type: messageBody.type,
+          hasPayload: !!messageBody.payload,
+        });
 
         span.setAttribute("job.type", messageBody.type);
-        span.setAttribute("notification.receive_count", receiveCount);
         span.setAttribute("sqs.message_id", message.MessageId);
 
         // Handle SNS message format
         let jobData;
-        if (messageBody.Type === 'Notification') {
+        if (messageBody.Type === "Notification") {
           // SNS wraps the original message
           jobData = JSON.parse(messageBody.Message);
-          logger.debug('Processing SNS fanout message', { jobData });
+          logger.debug("Processing SNS fanout message", { jobData });
         } else {
           // Direct SQS message
           jobData = messageBody;
         }
 
-        logger.info('Processing job', { type: jobData.type, attempt: receiveCount });
-        
+        logger.info("Processing job", {
+          type: jobData.type,
+          attempt: receiveCount,
+        });
+
         // Store event in database
-        logger.debug('Creating event in database');
+        logger.debug("Creating event in database");
         const newEvent = await Event.create({
-          type: jobData.type || 'notification_processed',
+          type: jobData.type || "notification_processed",
           payload: jobData.payload,
         });
-        logger.info('Event created', { eventId: newEvent._id });
-        
+        logger.info("Event created", { eventId: newEvent._id });
+
         await publisher.publish(
           "events",
-          JSON.stringify(newEvent)
+          JSON.stringify({
+            ...newEvent,
+            traceparent,
+          })
         );
-        logger.debug('Published event to Redis');
+        logger.debug("Published event to Redis");
 
         span.setStatus({ code: SpanStatusCode.OK });
-        logger.info('Job finished successfully', { type: jobData.type });
+        logger.info("Job finished successfully", { type: jobData.type });
 
         await deleteMessage(QUEUE_URL, message.ReceiptHandle);
-        logger.info('Successfully processed message', { messageId: message.MessageId });
+        logger.info("Successfully processed message", {
+          messageId: message.MessageId,
+        });
       } catch (error) {
-        logger.error('Error processing message', { messageId: message.MessageId, error });
+        logger.error('Error processing notification message', { 
+          messageId: message.MessageId,
+          attempt: receiveCount,
+          maxRetries,
+          error: error.message, 
+          stack: error.stack,
+          name: error.name,
+          queueUrl: QUEUE_URL,
+          queueArn: process.env.SQS_QUEUE_ARN || 'unknown',
+          willRetry: receiveCount < maxRetries
+        });
+        
+        // Enhanced error recording
         span.recordException(error);
-        span.setStatus({ code: SpanStatusCode.ERROR });
-        // Do NOT delete → SQS will handle DLQ routing after 3rd attempt
+        span.setStatus({ 
+          code: SpanStatusCode.ERROR,
+          message: error.message 
+        });
+        
+        // Add explicit error attributes
+        span.setAttribute('error.type', error.name);
+        span.setAttribute('error.message', error.message);
+        span.setAttribute('error.stack', error.stack);
+        span.setAttribute('error.occurred', true);
+        span.setAttribute('message.attempt', receiveCount);
+        span.setAttribute('sqs.queue_url', QUEUE_URL);
+        span.setAttribute('sqs.queue_arn', process.env.SQS_QUEUE_ARN || 'unknown');
+        
+        // Log retry warning for attempts 1-2, error for attempt 3+
+        if (receiveCount < 3) {
+          span.setAttribute('message.will_retry', true);
+          logger.warn('Message will be retried by SQS', {
+            messageId: message.MessageId,
+            attempt: receiveCount,
+            queueUrl: QUEUE_URL,
+            queueArn: process.env.SQS_QUEUE_ARN || 'unknown',
+            retryCount: receiveCount,
+            maxRetries: maxRetries
+          });
+        } else {
+          span.setAttribute('message.final_failure', true);
+          logger.error('Message moving to DLQ after max retries', {
+            messageId: message.MessageId,
+            attempt: receiveCount,
+            queueUrl: QUEUE_URL,
+            queueArn: process.env.SQS_QUEUE_ARN || 'unknown',
+            retryCount: receiveCount,
+            maxRetries: maxRetries
+          });
+        }
+        
+        // Don't delete message - SQS handles retries and DLQ automatically
       } finally {
         span.end();
-        logger.debug('Span ended', { messageId: message.MessageId });
+        logger.debug("Span ended", { messageId: message.MessageId });
       }
     });
   } catch (error) {
-    logger.error('Error processing job', { error: error.message });
+    logger.error('Error processing job', { 
+      error: error.message,
+      queueUrl: QUEUE_URL,
+      queueArn: process.env.SQS_QUEUE_ARN || 'unknown'
+    });
     // Do NOT delete → SQS will handle DLQ routing after 3rd attempt
   }
 }
@@ -100,21 +178,21 @@ async function processMessage(message) {
 async function pollQueue() {
   while (true) {
     try {
-      logger.debug('Polling queue', { queueUrl: QUEUE_URL });
+      logger.debug("Polling queue", { queueUrl: QUEUE_URL });
       const data = await receiveMessages(QUEUE_URL);
 
       if (data.Messages && data.Messages.length > 0) {
-        logger.info('Received messages', { count: data.Messages.length });
+        logger.info("Received messages", { count: data.Messages.length });
         await Promise.all(data.Messages.map(processMessage));
       } else {
-        logger.debug('No messages available');
+        logger.debug("No messages available");
       }
     } catch (err) {
-      logger.error('Error receiving messages', { error: err.message });
-      logger.error('Full error', { error: err });
+      logger.error("Error receiving messages", { error: err.message });
+      logger.error("Full error", { error: err });
     }
   }
 }
 
-logger.info('Starting notification worker');
+logger.info("Starting notification worker");
 pollQueue();
