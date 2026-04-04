@@ -32,10 +32,3 @@ export const deleteMessage = async (queueUrl, receiptHandle) => {
 
   return await sqsClient.send(command);
 };
-
-export const sendToDLQ = async (message, error) => {
-  // Minimal implementation - just log, don't actually send
-  console.log(`[DLQ] Would send message ${message.MessageId} to DLQ: ${error.message}`);
-  console.log(`[DLQ] Receive count: ${message.Attributes?.ApproximateReceiveCount || '1'}`);
-  return { messageId: message.MessageId, action: 'logged-only' };
-};

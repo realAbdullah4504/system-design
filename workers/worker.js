@@ -1,4 +1,4 @@
-import { receiveMessages, deleteMessage,sendToDLQ } from "./services/sqs.js";
+import { receiveMessages, deleteMessage } from "./services/sqs.js";
 import { createTracingSDK } from "./config/otel.js";
 const sdk = createTracingSDK("worker-service");
 await sdk.start();
@@ -12,14 +12,7 @@ import { context, propagation, trace, SpanStatusCode } from "@opentelemetry/api"
 
 // Worker function
 async function processMessage(message) {
-  const receiveCount = parseInt(message.Attributes?.ApproximateReceiveCount || '1');
-  const maxRetries = 3;
-  
-  logger.info('Processing message', { 
-    messageId: message.MessageId,
-    attempt: receiveCount,
-    maxRetries
-  });
+  logger.info('Processing message', { messageId: message.MessageId });
   
   // Parse SNS message first
   const snsMessage = JSON.parse(message.Body);
@@ -40,12 +33,6 @@ async function processMessage(message) {
     const tracer = trace.getTracer("worker");
 
     const span = tracer.startSpan("process-message");
-    
-    // Add retry attributes to span
-    span.setAttribute("message.attempt", receiveCount);
-    span.setAttribute("message.max_retries", maxRetries);
-    span.setAttribute("message.will_retry", receiveCount < maxRetries);
-    
     logger.debug('Started span', { traceId: span.spanContext().traceId });
 
     try {
@@ -84,62 +71,15 @@ async function processMessage(message) {
     } catch (error) {
       logger.error('Error processing message', { 
         messageId: message.MessageId,
-        attempt: receiveCount,
-        maxRetries,
         error: error.message, 
         stack: error.stack,
-        name: error.name,
-        willRetry: receiveCount < maxRetries
+        name: error.name
       });
-      
-      // Enhanced error recording
       span.recordException(error);
-      span.setStatus({ 
-        code: SpanStatusCode.ERROR,
-        message: error.message 
-      });
-      
-      // Add explicit error attributes
-      span.setAttribute('error.type', error.name);
-      span.setAttribute('error.message', error.message);
-      span.setAttribute('error.stack', error.stack);
-      span.setAttribute('error.occurred', true);
-      span.setAttribute('message.attempt', receiveCount);
-      span.setAttribute('message.max_retries', maxRetries);
-      
-      // Check if we should retry or reject
-      if (receiveCount >= maxRetries) {
-        logger.error('Max retries exceeded, rejecting message', {
-          messageId: message.MessageId,
-          attempt: receiveCount,
-          maxRetries
-        });
-        
-        span.setAttribute('message.final_failure', true);
-        span.setAttribute('dlq.action', 'should_send_to_dlq');
-        
-        // TODO: Send to Dead Letter Queue here
-        await sendToDLQ(message, error);
-        logger.info('Message sent to DLQ', { messageId: message.MessageId });
-        
-        // Delete message from queue to prevent infinite retries
-        await deleteMessage(QUEUE_URL, message.ReceiptHandle);
-        logger.info('Message deleted after max retries', { messageId: message.MessageId });
-      } else {
-        span.setAttribute('message.will_retry', true);
-        logger.warn('Message will be retried', {
-          messageId: message.MessageId,
-          attempt: receiveCount,
-          maxRetries,
-          nextAttempt: receiveCount + 1
-        });
-        
-        // Don't delete message - it will become visible again for retry
-        // SQS handles this automatically based on VisibilityTimeout
-      }
+      span.setStatus({ code: SpanStatusCode.ERROR });
     } finally {
       span.end();
-      logger.debug('Span ended', { messageId: message.MessageId, attempt: receiveCount });
+      logger.debug('Span ended', { messageId: message.MessageId });
     }
   });
 }
