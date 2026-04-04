@@ -2,7 +2,7 @@
 
 ## 🎯 Overview
 
-This guide shows how traces are collected in your observability stack using **OpenTelemetry Collector**. Currently, traces are being collected and exported to debug output for development and testing purposes.
+This guide shows how traces are collected using the **OpenTelemetry Collector** and visualized in **Jaeger UI**.
 
 ---
 
@@ -22,35 +22,37 @@ docker-compose -f docker-compose.prometheus.yml up -d
 
 ---
 
-## � Current Trace Collection Setup
+## Current Trace Collection Setup
 
 ### OpenTelemetry Pipeline
 
 ```text
-Backend Service → OpenTelemetry Collector → Debug Output
+Backend Service → OpenTelemetry Collector → Jaeger UI
 ```
 
-Your backend application is instrumented with OpenTelemetry and sends traces to the collector at `http://localhost:4318/v1/traces`. The collector currently exports these traces to debug output for verification.
+Your backend application sends traces to the collector at `http://localhost:4318/v1/traces`. The collector forwards them to Jaeger so you can explore request traces in the Jaeger UI.
 
 ---
 
-## � Viewing Trace Data
+## Viewing Trace Data
 
-### Method 1: Collector Debug Output
+### Method 1: Collector Logs (optional)
 
 ```bash
 docker logs otel-collector
 ```
 
-This will show the trace data being received and processed by the collector in real-time.
+Check this output for received spans and any export errors.
 
-### Method 2: Collector Health Check
+### Method 2: View in Jaeger UI
 
-Open http://localhost:13133 to verify the collector is running and view configuration details.
+Open `http://localhost:16686`, select `system-design-service` or `worker-service`, then click **Find Traces** to see recent requests.
+
+If Jaeger shows no new traces, verify collector health at `http://localhost:13133`.
 
 ---
 
-## � What You'll See in Debug Output
+## What You'll See in Jaeger and Collector Logs
 
 ### Trace Information
 - **Trace ID**: Unique identifier for the request
@@ -107,7 +109,7 @@ Your backend automatically creates spans for:
 
 ### 3. Debug Performance Issues
 
-Look for long durations in the debug output to identify slow operations.
+Look for long durations in Jaeger to identify slow operations.
 
 ---
 
@@ -118,12 +120,12 @@ Look for long durations in the debug output to identify slow operations.
 Your logs already include `trace_id` from the OpenTelemetry setup. Use it to:
 
 1. **Find trace ID in logs**: Look for `trace_id` in log entries
-2. **Search for that trace ID**: In collector debug output
+2. **Search for that trace ID**: In collector logs
 3. **Correlate operations**: Match log timestamps with trace spans
 
 ### Metrics + Traces
 
-While traces are currently in debug output, you can still:
+To connect metrics and traces during debugging, you can still:
 - **Monitor metrics** in Grafana (latency, error rates)
 - **Correlate metrics spikes** with trace data from collector logs
 - **Use trace IDs** from logs to investigate performance issues
@@ -140,7 +142,7 @@ HTTP Request → Express Route → Business Logic → SNS → Response
    Span 1         Span 2         Span 3   Span 4    Span 5
 ```
 
-In the collector debug output, you'll see:
+In the collector logs and Jaeger, you'll see:
 - **Total duration**: Entire request lifecycle
 - **Individual spans**: Each operation's timing
 - **Service information**: Service name and operation details
@@ -150,7 +152,7 @@ In the collector debug output, you'll see:
 
 ## 🛠️ Troubleshooting
 
-### No Traces in Collector Logs
+### No Traces in Jaeger
 
 1. **Check backend is running** with OpenTelemetry
 2. **Verify collector is running**: `docker ps | grep otel-collector`

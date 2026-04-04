@@ -1,6 +1,6 @@
 # Prometheus Monitoring Setup
 
-This document explains how to set up and run Prometheus locally for monitoring the system design application.
+This document explains how to set up and validate the Prometheus (metrics) part of the observability stack. For the full Stage 4b observability context (metrics + logging + tracing + local stack), see `docs/system.md`.
 
 ## Files Created
 
@@ -65,12 +65,13 @@ docker-compose -f docker-compose.prometheus.yml up -d
 
 ## Prometheus Configuration
 
-The `prometheus.yml` file configures:
+The `prometheus.yml` file defines scrape targets and intervals for:
 
-- Scrape interval: 15 seconds
-- Backend app scraping: Every 5 seconds from `localhost:3000/metrics`
-- Node exporter scraping: Every 5 seconds from `localhost:9100/metrics`
-- Redis exporter scraping: Every 5 seconds from `localhost:9121/metrics`
+- Backend app scraping: `http://localhost:3000/metrics`
+- Node exporter scraping: `http://localhost:9100/metrics`
+- Redis exporter scraping: `http://localhost:9121/metrics`
+
+Scrape intervals are configured in `prometheus.yml`; check that file for the exact values.
 
 ## Grafana Setup
 
@@ -125,3 +126,4 @@ docker-compose -f docker-compose.prometheus.yml down
 3. **Connection issues**: Verify Docker networking and port mappings
 4. **Redis exporter not accessible**: Ensure Redis is running and exporter can connect to Redis instance
 5. **Redis metrics missing**: Check Redis connection configuration in docker-compose file
+6. **Prometheus targets not UP**: Open the Prometheus UI and check `Status -> Targets` for errors
