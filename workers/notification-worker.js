@@ -1,4 +1,4 @@
-import { receiveMessages, deleteMessage } from "./services/sqs.js";
+import { receiveMessages, deleteMessage, sendToDLQ } from "./services/sqs.js";
 import { createTracingSDK } from "./config/otel.js";
 
 const sdk = createTracingSDK("notification-worker-service");
@@ -14,9 +14,14 @@ import { context, propagation, trace, SpanStatusCode } from "@opentelemetry/api"
 
 // Worker function
 async function processMessage(message) {
-  logger.info('Processing message', { messageId: message.MessageId });
+  const receiveCount = parseInt(message.Attributes?.ApproximateReceiveCount || '1');
+  const maxRetries = 3;
   
-  let receiveCount = 0;
+  logger.info('Processing notification message', { 
+    messageId: message.MessageId,
+    attempt: receiveCount,
+    maxRetries
+  });
 
   try {
     const snsMessage = JSON.parse(message.Body);
@@ -35,17 +40,19 @@ async function processMessage(message) {
     await context.with(ctx, async () => {
       const tracer = trace.getTracer("notification-worker");
       const span = tracer.startSpan("process-notification-message");
+      
+      // Add retry attributes to span
+      span.setAttribute("message.attempt", receiveCount);
+      span.setAttribute("message.max_retries", maxRetries);
+      span.setAttribute("message.will_retry", receiveCount < maxRetries);
+      
       logger.debug('Started span', { traceId: span.spanContext().traceId });
 
       try {
         const messageBody = JSON.parse(snsMessage.Message);
         logger.debug('Parsed message body', { type: messageBody.type, hasPayload: !!messageBody.payload });
 
-        receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
-        logger.debug('Receive count', { receiveCount });
-
         span.setAttribute("job.type", messageBody.type);
-        span.setAttribute("notification.receive_count", receiveCount);
         span.setAttribute("sqs.message_id", message.MessageId);
 
         // Handle SNS message format
@@ -81,18 +88,73 @@ async function processMessage(message) {
         await deleteMessage(QUEUE_URL, message.ReceiptHandle);
         logger.info('Successfully processed message', { messageId: message.MessageId });
       } catch (error) {
-        logger.error('Error processing message', { messageId: message.MessageId, error });
+        logger.error('Error processing notification message', { 
+          messageId: message.MessageId,
+          attempt: receiveCount,
+          maxRetries,
+          error: error.message, 
+          stack: error.stack,
+          name: error.name,
+          willRetry: receiveCount < maxRetries
+        });
+        
+        // Enhanced error recording
         span.recordException(error);
-        span.setStatus({ code: SpanStatusCode.ERROR });
-        // Do NOT delete → SQS will handle DLQ routing after 3rd attempt
+        span.setStatus({ 
+          code: SpanStatusCode.ERROR,
+          message: error.message 
+        });
+        
+        // Add explicit error attributes
+        span.setAttribute('error.type', error.name);
+        span.setAttribute('error.message', error.message);
+        span.setAttribute('error.stack', error.stack);
+        span.setAttribute('error.occurred', true);
+        span.setAttribute('message.attempt', receiveCount);
+        span.setAttribute('message.max_retries', maxRetries);
+        
+        // Check if we should retry or reject
+        if (receiveCount >= maxRetries) {
+          logger.error('Max retries exceeded, rejecting notification message', {
+            messageId: message.MessageId,
+            attempt: receiveCount,
+            maxRetries
+          });
+          
+          span.setAttribute('message.final_failure', true);
+          span.setAttribute('dlq.action', 'should_send_to_dlq');
+          
+          // Send to DLQ
+          await sendToDLQ(message, error);
+          logger.info('Notification message sent to DLQ', { messageId: message.MessageId });
+          
+          // Delete message from queue to prevent infinite retries
+          await deleteMessage(QUEUE_URL, message.ReceiptHandle);
+          logger.info('Notification message deleted after max retries', { messageId: message.MessageId });
+        } else {
+          span.setAttribute('message.will_retry', true);
+          logger.warn('Notification message will be retried', {
+            messageId: message.MessageId,
+            attempt: receiveCount,
+            maxRetries,
+            nextAttempt: receiveCount + 1
+          });
+          
+          // Don't delete message - it will become visible again for retry
+          // SQS handles this automatically based on VisibilityTimeout
+        }
       } finally {
         span.end();
-        logger.debug('Span ended', { messageId: message.MessageId });
+        logger.debug('Span ended', { messageId: message.MessageId, attempt: receiveCount });
       }
     });
   } catch (error) {
-    logger.error('Error processing job', { error: error.message });
-    // Do NOT delete → SQS will handle DLQ routing after 3rd attempt
+    logger.error('Error parsing notification message', { 
+      messageId: message.MessageId,
+      error: error.message,
+      stack: error.stack
+    });
+    // Continue processing other messages
   }
 }
 
