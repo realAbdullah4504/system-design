@@ -48,10 +48,6 @@ async function processMessage(message) {
   const receiveCount = Number.parseInt(message.Attributes?.ApproximateReceiveCount || '1');
   const maxRetries = 3;
   
-  // Start job timing
-  const startTime = Date.now();
-  const jobTimer = recordJobStart(WORKER_TYPE, 'unknown');
-  
   logger.info('Processing message', { 
     messageId: message.MessageId,
     attempt: receiveCount,
@@ -92,8 +88,8 @@ async function processMessage(message) {
       const messageBody = JSON.parse(snsMessage.Message);
       logger.debug('Parsed message body', { type: messageBody.type, hasPayload: !!messageBody.payload });
 
-      // Update job timer with actual job type
-      jobTimer({ job_type: messageBody.type });
+      //start job timer
+      const jobTimer = recordJobStart(WORKER_TYPE, messageBody.type);
       span.setAttribute("job.type", messageBody.type);
       span.setAttribute("sqs.message_id", message.MessageId);
 
