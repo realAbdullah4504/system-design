@@ -11,7 +11,7 @@ const jobProcessingDuration = new promClient.Histogram({
   name: 'worker_job_processing_duration_seconds',
   help: 'Duration of job processing in seconds',
   labelNames: ['worker_type', 'job_type', 'status'],
-  buckets: [0.1, 0.5, 1, 2, 5, 10, 20, 30, 60]
+  buckets: [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10, 30]
 });
 
 const jobsProcessedTotal = new promClient.Counter({

@@ -49,6 +49,7 @@ async function processMessage(message) {
   const maxRetries = 3;
   
   // Start job timing
+  const startTime = Date.now();
   const jobTimer = recordJobStart(WORKER_TYPE, 'unknown');
   
   logger.info('Processing message', { 

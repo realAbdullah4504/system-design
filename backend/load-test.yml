@@ -1,11 +1,18 @@
 config:
-  target: "http://localhost:3000"  # your API URL
+  target: "http://localhost:3000"
   phases:
-    - duration: 60  # run for 600 seconds (10 minutes)
-      arrivalRate: 200  # 5 requests per second
+    - duration: 60
+      arrivalRate: 200
 
 scenarios:
-  - name: "Async Wait"
+  - name: "Send Events Load Test"
     flow:
-      - get:
-          url: "/async-wait"
+      - post:
+          url: "/events/send"
+          json:
+            type: "load_test_event"
+            payload:
+              userId: "user_{{ $randomString() }}"
+              action: "test_action"
+              timestamp: "{{ $timestamp() }}"
+              testData: "Load test data {{ $randomInt(1, 1000) }}"

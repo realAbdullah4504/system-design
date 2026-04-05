@@ -11,7 +11,7 @@ const httpRequestDuration = new promClient.Histogram({
   name: 'http_request_duration_seconds',
   help: 'Duration of HTTP requests in seconds',
   labelNames: ['method', 'route', 'status_code'],
-  buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10]
+  buckets: [0.01, 0.05, 0.1, 0.5, 1, 3, 5, 10]
 });
 
 const httpRequestTotal = new promClient.Counter({
