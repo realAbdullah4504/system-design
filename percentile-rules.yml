@@ -1,0 +1,38 @@
+# Prometheus recording rules for percentile calculations
+groups:
+  - name: percentile.rules
+    interval: 15s
+    rules:
+      # HTTP Request Duration Percentiles
+      - record: http_request_duration_seconds:p95:5m
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, method, route))
+        
+      - record: http_request_duration_seconds:p99:5m
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, method, route))
+        
+      - record: http_request_duration_seconds:p50:5m
+        expr: histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, method, route))
+
+      # Worker Job Processing Duration Percentiles
+      - record: worker_job_processing_duration_seconds:p95:5m
+        expr: histogram_quantile(0.95, sum(rate(worker_job_processing_duration_seconds_bucket[5m])) by (le, worker_type, job_type))
+        
+      - record: worker_job_processing_duration_seconds:p99:5m
+        expr: histogram_quantile(0.99, sum(rate(worker_job_processing_duration_seconds_bucket[5m])) by (le, worker_type, job_type))
+        
+      - record: worker_job_processing_duration_seconds:p50:5m
+        expr: histogram_quantile(0.50, sum(rate(worker_job_processing_duration_seconds_bucket[5m])) by (le, worker_type, job_type))
+
+      # Request Rate Metrics
+      - record: http_requests_per_second:5m
+        expr: sum(rate(http_requests_total[5m])) by (method, route, status_code)
+        
+      - record: worker_jobs_per_second:5m
+        expr: sum(rate(worker_jobs_processed_total[5m])) by (worker_type, job_type, status)
+
+      # Error Rate Metrics
+      - record: http_error_rate:5m
+        expr: sum(rate(http_requests_total{status_code=~"5.."}[5m])) by (method, route) / sum(rate(http_requests_total[5m])) by (method, route)
+        
+      - record: worker_error_rate:5m
+        expr: sum(rate(worker_jobs_failed_total[5m])) by (worker_type, job_type) / sum(rate(worker_jobs_processed_total[5m])) by (worker_type, job_type)

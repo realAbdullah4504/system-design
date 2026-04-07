@@ -68,7 +68,7 @@ Goals:
 * Add **distributed tracing** using AWS X-Ray or OpenTelemetry  
 * Monitor **CPU, memory, network, queue depth, retries, DLQs, job latency**  
 * Set up **alerts** for failures, high latency, or abnormal behavior  
-* Log structured data for better observability and debugging  
+* Log structured data for better observability and debugging
 
 **Outputs:**
 
@@ -76,6 +76,23 @@ Goals:
 * Tracing from **API → Worker → DB → Event propagation**  
 * Alerts for immediate production issues  
 * Dashboards for real-time monitoring and historical analysis  
+
+**Validation Criteria:**
+
+- All services emit structured logs with correlation IDs
+- Distributed traces cover complete request flows
+- Metrics dashboards display real-time and historical data
+- Alerts trigger appropriately for defined thresholds
+- Team can troubleshoot issues using observability tools
+- Performance SLIs are tracked against SLOs
+
+**Tools and Technologies:**
+
+- **Metrics**: CloudWatch, Prometheus, Grafana
+- **Tracing**: AWS X-Ray, OpenTelemetry, Jaeger
+- **Logging**: CloudWatch Logs, Fluentd/Fluent Bit
+- **Alerting**: CloudWatch Alarms, Alertmanager, PagerDuty
+- **Visualization**: Grafana, CloudWatch Dashboards  
 
 ---
 

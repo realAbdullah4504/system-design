@@ -1,49 +1,219 @@
 import { receiveMessages, deleteMessage } from "./services/sqs.js";
+import { createTracingSDK } from "./config/otel.js";
+
+const sdk = createTracingSDK("notification-worker-service");
+await sdk.start();
+logger.info("OpenTelemetry started for notification worker");
+
 import { QUEUE_URL } from "./config/notification-sqs.js";
 import { publisher } from "./config/redis.js";
 import "./config/mongo.js";
 import Event from "./models/event.js";
+import logger from "./config/notification-logger.js";
+import {
+  context,
+  propagation,
+  trace,
+  SpanStatusCode,
+} from "@opentelemetry/api";
+import {
+  recordJobStart,
+  recordJobSuccess,
+  recordJobFailure,
+  updateMemoryUsage,
+  setWorkerHealth,
+  recordException,
+  recordDatabaseError,
+  recordRedisError,
+  recordSQSError,
+  workerUptime,
+  queueDepth
+} from "./services/prom.js";
+
+// Worker type identifier
+const WORKER_TYPE = "notification-worker";
+
+// Track worker start time
+const workerStartTime = Date.now();
+
+// Set initial worker health
+setWorkerHealth(WORKER_TYPE, true);
+
+// Update uptime metric
+workerUptime.labels(WORKER_TYPE).set(0);
+
+// Periodically update metrics
+setInterval(() => {
+  const uptime = (Date.now() - workerStartTime) / 1000;
+  workerUptime.labels(WORKER_TYPE).set(uptime);
+  updateMemoryUsage(WORKER_TYPE);
+}, 10000); // Update every 10 seconds
 
 // Worker function
 async function processMessage(message) {
-  let receiveCount = 0;
+  const receiveCount = Number.parseInt(message.Attributes?.ApproximateReceiveCount || '1');
+  const maxRetries = 3;
+  
+  // Start job timing
+  const jobTimer = recordJobStart(WORKER_TYPE, 'unknown');
+  
+  logger.info('Processing message', { 
+    messageId: message.MessageId,
+    attempt: receiveCount,
+    maxRetries,
+    queueUrl: QUEUE_URL,
+    queueArn: process.env.SQS_QUEUE_ARN || 'unknown'
+  });
 
   try {
     const snsMessage = JSON.parse(message.Body);
-    const messageBody = JSON.parse(snsMessage.Message);
 
-    console.log("[Notification Worker] Received message:", messageBody);
-    receiveCount = Number(message.Attributes?.ApproximateReceiveCount || 1);
+    // 1. Extract trace context from SNS message attributes
+    const traceparent = snsMessage.MessageAttributes?.traceparent?.Value;
+    logger.debug("Trace context", { present: !!traceparent });
 
-    // Handle SNS message format
-    let jobData;
-    if (messageBody.Type === 'Notification') {
-      // SNS wraps the original message
-      jobData = JSON.parse(messageBody.Message);
-      console.log("[Notification Worker] Processing SNS fanout message :", jobData);
-    } else {
-      // Direct SQS message
-      jobData = messageBody;
-    }
+    const carrier = {
+      traceparent,
+    };
 
-    console.log(`[Notification Worker] Processing job ${jobData.type}, attempt #${receiveCount}`);
-    
-    // Store event in database
-    const newEvent = await Event.create({
-      type: jobData.type || 'notification_processed',
-      payload: jobData.payload,
+    const ctx = propagation.extract(context.active(), carrier);
+
+    // 2. Create span INSIDE extracted context
+    await context.with(ctx, async () => {
+      const tracer = trace.getTracer("notification-worker");
+      const span = tracer.startSpan("process-notification-message");
+      // Add retry attributes to span
+      span.setAttribute("message.attempt", receiveCount);
+      span.setAttribute("message.max_retries", maxRetries);
+      span.setAttribute("message.will_retry", receiveCount < maxRetries);
+      span.setAttribute("sqs.queue_url", QUEUE_URL);
+      span.setAttribute("sqs.queue_arn", process.env.SQS_QUEUE_ARN || 'unknown');
+      
+      logger.debug('Started span', { traceId: span.spanContext().traceId });
+
+      try {
+        const messageBody = JSON.parse(snsMessage.Message);
+        logger.debug("Parsed message body", {
+          type: messageBody.type,
+          hasPayload: !!messageBody.payload,
+        });
+
+        span.setAttribute("job.type", messageBody.type);
+        span.setAttribute("sqs.message_id", message.MessageId);
+
+        // Handle SNS message format
+        let jobData;
+        if (messageBody.Type === "Notification") {
+          // SNS wraps the original message
+          jobData = JSON.parse(messageBody.Message);
+          logger.debug("Processing SNS fanout message", { jobData });
+        } else {
+          // Direct SQS message
+          jobData = messageBody;
+        }
+
+        logger.info("Processing job", {
+          type: jobData.type,
+          attempt: receiveCount,
+        });
+
+        // Update job timer with actual job type
+        jobTimer({ job_type: jobData.type });
+
+        // Store event in database
+        logger.debug("Creating event in database");
+        const newEvent = await Event.create({
+          type: jobData.type || "notification_processed",
+          payload: jobData.payload,
+        });
+        logger.info("Event created", { eventId: newEvent._id });
+
+        await publisher.publish(
+          "events",
+          JSON.stringify({
+            ...newEvent,
+            traceparent,
+          })
+        );
+        logger.debug("Published event to Redis");
+
+        span.setStatus({ code: SpanStatusCode.OK });
+        logger.info("Job finished successfully", { type: jobData.type });
+
+        // Record job success
+        recordJobSuccess(jobTimer, WORKER_TYPE, jobData.type);
+
+        await deleteMessage(QUEUE_URL, message.ReceiptHandle);
+        logger.info("Successfully processed message", {
+          messageId: message.MessageId,
+        });
+      } catch (error) {
+        logger.error('Error processing notification message', { 
+          messageId: message.MessageId,
+          attempt: receiveCount,
+          maxRetries,
+          error: error.message, 
+          stack: error.stack,
+          name: error.name,
+          queueUrl: QUEUE_URL,
+          queueArn: process.env.SQS_QUEUE_ARN || 'unknown',
+          willRetry: receiveCount < maxRetries
+        });
+        
+        // Record job failure
+        recordJobFailure(jobTimer, WORKER_TYPE, jobData?.type || 'unknown', error.name);
+        
+        // Enhanced error recording
+        span.recordException(error);
+        span.setStatus({ 
+          code: SpanStatusCode.ERROR,
+          message: error.message 
+        });
+        
+        // Add explicit error attributes
+        span.setAttribute('error.type', error.name);
+        span.setAttribute('error.message', error.message);
+        span.setAttribute('error.stack', error.stack);
+        span.setAttribute('error.occurred', true);
+        span.setAttribute('message.attempt', receiveCount);
+        span.setAttribute('sqs.queue_url', QUEUE_URL);
+        span.setAttribute('sqs.queue_arn', process.env.SQS_QUEUE_ARN || 'unknown');
+        
+        // Log retry warning for attempts 1-2, error for attempt 3+
+        if (receiveCount < 3) {
+          span.setAttribute('message.will_retry', true);
+          logger.warn('Message will be retried by SQS', {
+            messageId: message.MessageId,
+            attempt: receiveCount,
+            queueUrl: QUEUE_URL,
+            queueArn: process.env.SQS_QUEUE_ARN || 'unknown',
+            retryCount: receiveCount,
+            maxRetries: maxRetries
+          });
+        } else {
+          span.setAttribute('message.final_failure', true);
+          logger.error('Message moving to DLQ after max retries', {
+            messageId: message.MessageId,
+            attempt: receiveCount,
+            queueUrl: QUEUE_URL,
+            queueArn: process.env.SQS_QUEUE_ARN || 'unknown',
+            retryCount: receiveCount,
+            maxRetries: maxRetries
+          });
+        }
+        
+        // Don't delete message - SQS handles retries and DLQ automatically
+      } finally {
+        span.end();
+        logger.debug("Span ended", { messageId: message.MessageId });
+      }
     });
-    
-    await publisher.publish(
-      "events",
-      JSON.stringify(newEvent.toJSON())
-    );
-
-    console.log(`[Notification Worker] Job ${jobData.type} finished successfully.`);
-
-    await deleteMessage(QUEUE_URL, message.ReceiptHandle);
   } catch (error) {
-    console.error(`[Notification Worker] Error processing job:`, error.message);
+    logger.error('Error processing job', { 
+      error: error.message,
+      queueUrl: QUEUE_URL,
+      queueArn: process.env.SQS_QUEUE_ARN || 'unknown'
+    });
     // Do NOT delete → SQS will handle DLQ routing after 3rd attempt
   }
 }
@@ -52,19 +222,29 @@ async function processMessage(message) {
 async function pollQueue() {
   while (true) {
     try {
-      console.log(`[Notification Worker] Polling queue: ${QUEUE_URL}`);
+      logger.debug("Polling queue", { queueUrl: QUEUE_URL });
       const data = await receiveMessages(QUEUE_URL);
 
+      // Update queue depth metric
+      if (data.Messages) {
+        queueDepth.labels(WORKER_TYPE, QUEUE_URL).set(data.Messages.length);
+      }
+
       if (data.Messages && data.Messages.length > 0) {
-        console.log(`[Notification Worker] Received ${data.Messages.length} messages`);
+        logger.info("Received messages", { count: data.Messages.length });
         await Promise.all(data.Messages.map(processMessage));
       } else {
-        console.log(`[Notification Worker] No messages available`);
+        logger.debug("No messages available");
+        queueDepth.labels(WORKER_TYPE, QUEUE_URL).set(0);
       }
     } catch (err) {
-      console.error("[Notification Worker] Error receiving messages:", err);
+      logger.error("Error receiving messages", { error: err.message });
+      logger.error("Full error", { error: err });
+      // Record SQS error
+      recordSQSError(WORKER_TYPE, 'receive_messages', err.name);
     }
   }
 }
 
+logger.info("Starting notification worker");
 pollQueue();

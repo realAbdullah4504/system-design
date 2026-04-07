@@ -1,0 +1,2 @@
+histogram_quantile(0.95,rate(http_request_duration_seconds_bucket{route="/events/send"}[5m]))
+histogram_quantile(0.95,sum(rate(http_request_duration_seconds_bucket{route="/events/send"}[5m])) by (le))

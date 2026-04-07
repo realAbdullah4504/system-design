@@ -1,11 +1,18 @@
 config:
-  target: "http://loadtest-balancer-619162860.us-east-1.elb.amazonaws.com"  # your API URL
+  target: "http://localhost:3000"
   phases:
-    - duration: 10  # run for 600 seconds (10 minutes)
-      arrivalRate: 1  # 5 requests per second
+    - duration: 300
+      arrivalRate: 1
 
 scenarios:
-  - name: "Push CPU jobs to SQS"
+  - name: "Send Events Load Test"
     flow:
-      - get:
-          url: "/stress-cpu"
+      - post:
+          url: "/events/send"
+          json:
+            type: "load_test_event"
+            payload:
+              userId: "user_{{ $randomString() }}"
+              action: "test_action"
+              timestamp: "{{ $timestamp() }}"
+              testData: "Load test data {{ $randomInt(1, 1000) }}"

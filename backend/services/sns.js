@@ -1,27 +1,40 @@
 import { PublishCommand } from "@aws-sdk/client-sns";
 import { snsClient, TOPIC_ARN } from "../config/sns.js";
+import logger from "../config/logger.js";
+import { context, propagation } from "@opentelemetry/api";
 
 export const publishJobEvent = async (message) => {
     try {
-        console.log(`[SNS] Preparing to publish message:`, message);
-        console.log(`[SNS] Topic ARN: ${TOPIC_ARN}`);
+        logger.info('Preparing to publish SNS message', { message, topicArn: TOPIC_ARN });
         
+        const carrier = {};
+        propagation.inject(context.active(), carrier);
+
         const command = new PublishCommand({
             TopicArn: TOPIC_ARN,
             Message: JSON.stringify(message),
+            MessageAttributes: carrier.traceparent ? {
+                'traceparent': {
+                    DataType: 'String',
+                    StringValue: carrier.traceparent
+                }
+            } : {}
         });
         
         const result = await snsClient.send(command);
-        console.log(`[SNS] Message published successfully. MessageId: ${result.MessageId}`);
-        console.log(`[SNS] SequenceNumber: ${result.SequenceNumber || 'N/A'}`);
+        logger.info('SNS message published successfully', { 
+            messageId: result.MessageId,
+            sequenceNumber: result.SequenceNumber || 'N/A',
+            topicArn: TOPIC_ARN
+        });
         
         return result;
     } catch (error) {
-        console.error("[SNS] ERROR - Failed to publish message:", error);
-        console.error("[SNS] Error details:", {
-            message: error.message,
+        logger.error('Failed to publish SNS message', {
+            error: error.message,
             name: error.name,
-            stack: error.stack
+            stack: error.stack,
+            topicArn: TOPIC_ARN
         });
         throw error;
     }
