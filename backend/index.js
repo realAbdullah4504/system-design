@@ -52,6 +52,15 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  if (req.path === '/events/send') {
+    const randomDelay = Math.random() * 1000; // 0-1000ms
+    setTimeout(() => next(), randomDelay);
+  } else {
+    next();
+  }
+});
+
 // Track active connections
 app.use((req, res, next) => {
   activeConnections.inc();
@@ -100,7 +109,7 @@ app.post("/events/send", async (req, res) => {
 
   try {
       logger.info('Publishing to SNS', { topicArn: process.env.TOPIC_ARN, type });
-      await publishJobEvent({ type, payload });
+      // await publishJobEvent({ type, payload });
       logger.info('Successfully published to SNS', { type });
 
     res.json({

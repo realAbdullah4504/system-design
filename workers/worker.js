@@ -88,8 +88,15 @@ async function processMessage(message) {
       const messageBody = JSON.parse(snsMessage.Message);
       logger.debug('Parsed message body', { type: messageBody.type, hasPayload: !!messageBody.payload });
 
-      //start job timer
+      // Start job timer and capture start time
+      const jobStartTime = Date.now();
       const jobTimer = recordJobStart(WORKER_TYPE, messageBody.type);
+      logger.info('Job processing started', { 
+        messageId: message.MessageId, 
+        jobType: messageBody.type,
+        startTime: jobStartTime
+      });
+      
       span.setAttribute("job.type", messageBody.type);
       span.setAttribute("sqs.message_id", message.MessageId);
 
@@ -116,15 +123,32 @@ async function processMessage(message) {
       logger.debug('Published event to Redis');
 
       span.setStatus({ code: SpanStatusCode.OK });
-      logger.info('Successfully processed message', { messageId: message.MessageId });
+      
+      // Calculate exact processing time
+      const processingTimeMs = Date.now() - jobStartTime;
+      const processingTimeSec = processingTimeMs / 1000;
+      
+      logger.info('Job completed successfully', { 
+        messageId: message.MessageId,
+        jobType: messageBody.type,
+        processingTimeMs,
+        processingTimeSec: processingTimeSec.toFixed(3)
+      });
 
       // Record job success
       recordJobSuccess(jobTimer, WORKER_TYPE, messageBody.type);
 
       await deleteMessage(QUEUE_URL, message.ReceiptHandle);
     } catch (error) {
+      // Calculate processing time even for failures
+      const processingTimeMs = Date.now() - jobStartTime;
+      const processingTimeSec = processingTimeMs / 1000;
+      
       logger.error('Error processing message', { 
         messageId: message.MessageId,
+        jobType: messageBody?.type || 'unknown',
+        processingTimeMs,
+        processingTimeSec: processingTimeSec.toFixed(3),
         error: error.message, 
         stack: error.stack,
         name: error.name,
@@ -133,7 +157,7 @@ async function processMessage(message) {
       });
       
       // Record job failure
-      recordJobFailure(jobTimer, WORKER_TYPE, 'unknown', error.name);
+      recordJobFailure(jobTimer, WORKER_TYPE, messageBody?.type || 'unknown', error.name);
       
       // Enhanced error recording
       span.recordException(error);
