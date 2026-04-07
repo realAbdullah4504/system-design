@@ -1,28 +1,34 @@
-# Stage 4b: Observability and Monitoring (Implemented)
+# System Reference: Current Implementation (Observability + Event Flow)
 
 ## Overview
 
-This document describes the **observability pieces that are implemented in this repository today**.
+This document describes the **current system implementation in this repository today**, with an emphasis on the **observability stack** and the **end-to-end event flow**.
 
 Implemented capabilities:
 
-- **Metrics**: Prometheus metrics exposed by the backend at `GET /metrics`.
-- **Logging**: Structured JSON logs written by the backend and workers to `logs/*.log`.
-- **Traces**: Distributed tracing with OpenTelemetry, visualized in Jaeger UI.
-- **Local observability stack**: Docker Compose stack providing Prometheus, Grafana, Loki, Promtail, Jaeger, node-exporter, redis-exporter, and OpenTelemetry Collector.
+- **API**: Express backend exposes event endpoints, health checks, and metrics.
+- **Workers**: Long-running consumers process SQS messages, persist results, and publish real-time updates.
+- **Metrics**: Prometheus metrics exposed by:
+  - Backend at `GET /metrics` (port `3000`)
+  - Worker metrics server at `GET /metrics` (port `4000`)
+- **Logging**: Structured JSON logs written by backend and workers to `backend/logs/*.log` and `workers/logs/*.log`.
+- **Traces**: Distributed tracing with OpenTelemetry (OTLP HTTP/GRPC) exported to the OpenTelemetry Collector and visualized in Jaeger.
+- **Local observability stack**: `docker-compose.prometheus.yml` provides Prometheus, Grafana, Loki, Promtail, Jaeger, node-exporter, redis-exporter, and the OpenTelemetry Collector.
 
 ## Current Status
 
-### ✅ Implemented
+### Implemented
 
 - Backend metrics collection (Prometheus)
+- Worker metrics server (Prometheus)
 - Structured logging (Winston)
 - Distributed tracing (OpenTelemetry)
 - Local observability stack (Docker Compose)
-- Worker tracing with context propagation
+- Worker tracing with context propagation (via `traceparent` message attribute)
 - Log aggregation (Loki/Promtail)
+- Real-time event streaming to clients (SSE) driven by Redis Pub/Sub
 
-### 🔄 Not Yet Implemented (Future Stage 4 sub-stages)
+### Not Yet Implemented (Future Stage 4 sub-stages)
 
 - **CI/CD Pipelines** (Stage 4a)
 - **Secrets Management** (Stage 4c)
@@ -35,14 +41,27 @@ Implemented capabilities:
 ## Architecture (Local)
 
 ```text
-backend (Express)
-  - /metrics  -> Prometheus scrape
-  - logs/*.log -> Promtail -> Loki
-  - traces     -> OpenTelemetry Collector -> Jaeger
+client
+  - GET  /events/stream (SSE)
+     -> backend keeps connection open + streams events
+
+backend (Express, :3000)
+  - GET  /metrics       -> Prometheus scrape
+  - GET  /health        -> checks Mongo + Redis + SNS configuration
+  - GET  /events        -> reads Mongo
+  - POST /events/send   -> (optionally) publish to SNS with trace context
+  - GET  /events/stream -> SSE; backend subscribes to Redis channel and broadcasts
+  - logs backend/logs/*.log -> Promtail -> Loki
+  - traces -> OpenTelemetry Collector -> Jaeger
 
 workers (Node.js)
-  - traces     -> OpenTelemetry Collector -> Jaeger
-  - logs/*.log -> Promtail -> Loki
+  - worker.js consumes from SQS (SNS fanout message format)
+  - notification-worker.js consumes from a second queue
+  - persists Event to Mongo
+  - publishes to Redis channel "events" (drives SSE)
+  - exposes worker metrics at :4000/metrics
+  - logs workers/logs/*.log -> Promtail -> Loki
+  - traces -> OpenTelemetry Collector -> Jaeger
 
 docker-compose.prometheus.yml
   - Prometheus -> Grafana
@@ -54,18 +73,31 @@ docker-compose.prometheus.yml
 
 ## Repo Entry Points
 
-- **Prometheus metrics service**: `backend/services/prom.js`
-- **Metrics middleware + endpoint**: `backend/index.js`
-- **Structured logger**: `backend/config/logger.js`
-- **OpenTelemetry configuration**: `backend/config/otel.js`, `workers/config/otel.js`
-- **Local stack**: `docker-compose.prometheus.yml`
+- **Backend**: `backend/index.js`
+- **Backend metrics + custom metrics**: `backend/services/prom.js`
+- **Worker metrics + custom metrics**: `workers/services/prom.js`
+- **Worker metrics HTTP server**: `workers/metrics-server.js`
+- **Structured loggers**:
+  - `backend/config/logger.js`
+  - `workers/config/logger.js`
+  - `workers/config/notification-logger.js`
+- **OpenTelemetry configuration**:
+  - `backend/config/otel.js`
+  - `workers/config/otel.js`
+- **SNS publishing (trace context propagation)**: `backend/services/sns.js`
+- **Redis Pub/Sub used for SSE updates**:
+  - `backend/services/redis.js`
+  - `backend/config/redis.js`
+  - `workers/config/redis.js`
+- **Workers**:
+  - `workers/worker.js`
+  - `workers/notification-worker.js`
+- **Local observability stack**: `docker-compose.prometheus.yml`
 - **Prometheus scrape config**: `prometheus.yml`
 - **Loki + Promtail configs**:
   - `loki-config.yml`
   - `promtail-config.yml`
 - **OpenTelemetry Collector config**: `otel-collector-config.yaml`
-- **Worker service**: `workers/worker.js`
-- **Notification worker**: `workers/notification-worker.js`
 
 ## Metrics
 
@@ -79,14 +111,27 @@ docker-compose.prometheus.yml
     - `http_requests_total` (Counter)
     - `active_connections` (Gauge)
 
+### Worker metrics endpoint
+
+Workers expose metrics via a dedicated metrics HTTP server:
+
+- **URL**: `http://localhost:4000/metrics`
+- **Scrape job**: `worker-service` (see `prometheus.yml`)
+
 ### Prometheus scrape
 
-Prometheus is configured to scrape the backend via `host.docker.internal` (Docker Desktop):
+Prometheus is configured to scrape local services via `host.docker.internal` (Docker Desktop):
 
 ```yaml
   - job_name: 'backend-app'
     static_configs:
       - targets: ['host.docker.internal:3000']
+    metrics_path: '/metrics'
+    scrape_interval: 5s
+
+  - job_name: 'worker-service'
+    static_configs:
+      - targets: ['host.docker.internal:4000']
     metrics_path: '/metrics'
     scrape_interval: 5s
 ```
@@ -100,18 +145,33 @@ The backend uses Winston to emit JSON logs to:
 - `backend/logs/combined.log`
 - `backend/logs/error.log`
 
+### Worker structured logs
+
+Workers emit JSON logs to:
+
+- `workers/logs/combined.log`
+- `workers/logs/error.log`
+
 ### Log shipping (Promtail -> Loki)
 
-Promtail reads the backend log files mounted into the container and pushes them to Loki:
+Promtail reads backend and worker log files mounted into the container and pushes them to Loki:
 
 ```yaml
-  - job_name: app-logs
+  - job_name: backend-logs
     static_configs:
       - targets:
           - localhost
         labels:
           job: api-service
-          __path__: /var/log/app/*.log
+          __path__: /var/log/backend/*.log
+
+  - job_name: workers-logs
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: worker-services
+          __path__: /var/log/workers/*.log
 ```
 
 ## Tracing
@@ -122,13 +182,12 @@ The backend uses OpenTelemetry for distributed tracing with automatic instrument
 
 - **Backend Service Name**: `system-design-service`
 - **Worker Service Name**: `worker-service`
+- **Notification Worker Service Name**: `notification-worker-service`
 - **Trace Exporter**: OTLP HTTP to OpenTelemetry Collector
 - **Collector Endpoint**: `http://localhost:4318/v1/traces`
 - **Visualization**: Jaeger UI
 
 ### OpenTelemetry Configuration
-
-The backend and workers are instrumented with OpenTelemetry SDK:
 
 ```js
 // backend/config/otel.js & workers/config/otel.js
@@ -248,6 +307,17 @@ npm install
 npm start
 ```
 
+If you want to run the notification worker as well, start it separately from the `workers` folder:
+
+```bash
+node notification-worker.js
+```
+
+The worker metrics server listens on `WORKER_METRICS_PORT` (defaults to `4000`) and exposes:
+
+- `GET /metrics`
+- `GET /health`
+
 ### 3) Start the observability stack
 
 From repo root:
@@ -273,6 +343,8 @@ curl -X POST http://localhost:3000/events/send \
   -d '{"type":"test","payload":{"message":"hello"}}'
 ```
 
+In the current repo state, the SNS publish call in `POST /events/send` is present but commented out. If you enable it (uncomment the `publishJobEvent(...)` call in `backend/index.js`), this request will publish a message with `traceparent` injected into SNS `MessageAttributes`, which workers will extract to continue the trace.
+
 ### 6) View Traces in Jaeger
 
 1. Open `http://localhost:16686`
@@ -294,6 +366,39 @@ histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
 active_connections
 ```
 
+## Event Flow (Current)
+
+### Event ingestion and fanout
+
+```text
+HTTP POST /events/send
+├── Express route handler (backend)
+├── (optional) SNS publish (backend/services/sns.js)
+│    └── inject trace context into MessageAttributes.traceparent
+└── Response
+```
+
+### Worker processing
+
+```text
+SQS receive (message body is SNS envelope)
+├── extract trace context from MessageAttributes.traceparent
+├── start span "process-message"
+├── simulate work (setTimeout)
+├── write Event to Mongo
+├── publish event to Redis channel "events"
+└── delete SQS message (on success)
+```
+
+### Real-time streaming to clients (SSE)
+
+```text
+Client GET /events/stream
+├── backend accepts SSE connection
+├── backend subscribes to Redis channel "events"
+└── backend forwards messages to all connected SSE clients
+```
+
 ## Trace Analysis
 
 ### Common Trace Patterns
@@ -312,7 +417,7 @@ HTTP GET /events
 ```text
 HTTP POST /events/send
 ├── Express Route Handler
-├── SNS Publish
+├── (optional) SNS Publish
 └── Response
 ```
 

@@ -9,7 +9,6 @@ Welcome to the comprehensive system design documentation for DevOps + MERN stack
 
 ### [Development Stages](stages/)
 - **[Overview](stages/overview.md)** - Complete roadmap from Stage 0 to Stage 5
-- **[Stage 0](stages/stage-0/)** - Foundation & Setup
 - **[Stage 1](stages/stage-1/)** - Single Service Development
 - **[Stage 2](stages/stage-2/)** - Monolith to Queue Integration
 - **[Stage 3](stages/stage-3/)** - Horizontal Scaling
@@ -32,7 +31,7 @@ Each stage builds upon previous knowledge, with practical tasks and measurable o
 
 1. Start with the [System Design Thinking](methodology/SYSTEM_DESIGN_THINKING.md) to understand the core principles
 2. Review the [Stages Overview](stages/overview.md) to see the complete learning path
-3. Begin with Stage 0 if you're new to MERN stack development
+3. Begin with Stage 1 if you're new to MERN stack development
 4. Progress through each stage at your own pace
 
 ---
