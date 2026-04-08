@@ -16,10 +16,10 @@ Resources:
   #########################################
   # ECR Repositories
   #########################################
-  ECRRepository:
+  ApiServiceRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: system-design-api
+      RepositoryName: api-service-repo
       ImageScanningConfiguration:
         ScanOnPush: true
 
@@ -79,10 +79,10 @@ Resources:
                   - logs:PutLogEvents
                 Resource: arn:aws:logs:*:*:*
 
-  BackendCodeBuildProject:
+  MultiServiceCodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: backend-docker-build
+      Name: multi-service-docker-build
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Source:
         Type: GITHUB
@@ -100,7 +100,11 @@ Resources:
           - Name: AWS_ACCOUNT_ID
             Value: !Ref AWS::AccountId
           - Name: IMAGE_REPO_NAME
-            Value: system-design-api
+            Value: !Ref ApiServiceRepository
+          - Name: NOTIFICATION_WORKER_REPO_NAME
+            Value: !Ref NotificationWorkerECRRepository
+          - Name: MAIN_WORKER_REPO_NAME
+            Value: !Ref MainWorkerECRRepository
           - Name: IMAGE_TAG
             Value: latest
           - Name: BRANCH
@@ -110,16 +114,16 @@ Resources:
       LogsConfig:
         CloudWatchLogs:
           Status: ENABLED
-          GroupName: /aws/codebuild/backend-docker-build
+          GroupName: /aws/codebuild/multi-service-docker-build
           StreamName: build-logs
 
 #########################################
 # Outputs
 #########################################
 Outputs:
-  ECRRepositoryName:
-    Value: !Ref ECRRepository
-    Description: Name of the ECR repository
+  ApiServiceRepositoryName:
+    Value: !Ref ApiServiceRepository
+    Description: Name of the API service ECR repository
   NotificationWorkerECRRepositoryName:
     Value: !Ref NotificationWorkerECRRepository
     Description: Name of the notification worker ECR repository
@@ -127,5 +131,5 @@ Outputs:
     Value: !Ref MainWorkerECRRepository
     Description: Name of the main worker ECR repository
   CodeBuildProjectName:
-    Value: !Ref BackendCodeBuildProject
-    Description: Name of the CodeBuild project
+    Value: !Ref MultiServiceCodeBuildProject
+    Description: Name of the multi-service CodeBuild project
