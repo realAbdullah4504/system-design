@@ -90,9 +90,20 @@ async function processMessage(message) {
       span.setAttribute("sqs.queue_arn", process.env.SQS_QUEUE_ARN || 'unknown');
       
       logger.debug('Started span', { traceId: span.spanContext().traceId });
+      
+      // Handle SNS message format
+      let jobData;
+      const messageBody = JSON.parse(snsMessage.Message);
+      if (messageBody.Type === "Notification") {
+        // SNS wraps the original message
+        jobData = JSON.parse(messageBody.Message);
+        logger.debug("Processing SNS fanout message", { jobData });
+      } else {
+        // Direct SQS message
+        jobData = messageBody;
+      }
 
       try {
-        const messageBody = JSON.parse(snsMessage.Message);
         logger.debug("Parsed message body", {
           type: messageBody.type,
           hasPayload: !!messageBody.payload,
@@ -101,16 +112,6 @@ async function processMessage(message) {
         span.setAttribute("job.type", messageBody.type);
         span.setAttribute("sqs.message_id", message.MessageId);
 
-        // Handle SNS message format
-        let jobData;
-        if (messageBody.Type === "Notification") {
-          // SNS wraps the original message
-          jobData = JSON.parse(messageBody.Message);
-          logger.debug("Processing SNS fanout message", { jobData });
-        } else {
-          // Direct SQS message
-          jobData = messageBody;
-        }
 
         logger.info("Processing job", {
           type: jobData.type,
