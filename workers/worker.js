@@ -92,14 +92,14 @@ async function processMessage(message) {
     span.setAttribute("sqs.queue_arn", process.env.SQS_QUEUE_ARN || 'unknown');
     
     logger.debug('Started span', { traceId: span.spanContext().traceId });
+    let jobStartTime;
+    const messageBody = JSON.parse(snsMessage.Message);
+    const jobTimer = recordJobStart(WORKER_TYPE, messageBody.type);
+    jobStartTime = Date.now();
 
     try {
-      const messageBody = JSON.parse(snsMessage.Message);
       logger.debug('Parsed message body', { type: messageBody.type, hasPayload: !!messageBody.payload });
 
-      // Start job timer and capture start time
-      const jobStartTime = Date.now();
-      const jobTimer = recordJobStart(WORKER_TYPE, messageBody.type);
       logger.info('Job processing started', { 
         messageId: message.MessageId, 
         jobType: messageBody.type,
