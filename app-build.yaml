@@ -46,13 +46,13 @@ Resources:
               - Effect: Allow
                 Action:
                   - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
                   - ecr:InitiateLayerUpload
                   - ecr:UploadLayerPart
                   - ecr:CompleteLayerUpload
                   - ecr:PutImage
                   - ecr:BatchGetImage
                   - ecr:GetDownloadUrlForLayer
-                  - ecr:CreateRepository
                 Resource: '*'
         - PolicyName: CloudWatchLogs-Policy
           PolicyDocument:
@@ -86,7 +86,7 @@ Resources:
           - Name: AWS_ACCOUNT_ID
             Value: !Ref AWS::AccountId
           - Name: IMAGE_REPO_NAME
-            Value: !Ref ECRRepository
+            Value: system-design-api
           - Name: IMAGE_TAG
             Value: latest
           - Name: BRANCH
