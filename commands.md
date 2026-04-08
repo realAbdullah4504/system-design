@@ -12,6 +12,12 @@ aws cloudformation deploy \
   --parameter-overrides ClusterName=my-production-cluster DesiredCapacity=2 KeyName=keypair \
   --capabilities CAPABILITY_NAMED_IAM
 
+aws cloudformation deploy \
+  --template-file app-build.yaml \
+  --stack-name app-build \
+  --parameter-overrides GitHubRepoUrl=https://github.com/realAbdullah4504/system-design.git GitHubBranch=stage-4 \
+  --capabilities CAPABILITY_NAMED_IAM
+
 
 ## SNS and SQS Setup
 aws sns create-topic \

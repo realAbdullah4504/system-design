@@ -10,22 +10,28 @@ Parameters:
     Type: String
     Default: keypair
     Description: Name of existing EC2 KeyPair (without .pem)
+  GitHubRepoUrl:
+    Type: String
+    Default: https://github.com/realAbdullah4504/system-design.git
+    Description: GitHub repository URL (e.g., https://github.com/username/repo.git)
+  GitHubBranch:
+    Type: String
+    Default: stage-4
+    Description: GitHub branch to build from
 
 Resources:
-###########################################################################
-# ECS Cluster
-###########################################################################
-  # -------------------------
+
+  #########################################
   # ECS Cluster
-  # -------------------------
+  #########################################
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: ecs-cluster
 
-  # -------------------------
+  #########################################
   # IAM Role for EC2
-  # -------------------------
+  #########################################
   ECSInstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -45,9 +51,9 @@ Resources:
       Roles:
         - !Ref ECSInstanceRole
 
-  # -------------------------
+  #########################################
   # Launch Template (EC2)
-  # -------------------------
+  #########################################
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -62,9 +68,9 @@ Resources:
             #!/bin/bash
             echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
 
-  # -------------------------
+  #########################################
   # Auto Scaling Group
-  # -------------------------
+  #########################################
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -77,9 +83,9 @@ Resources:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
 
-  # -------------------------
+  #########################################
   # Capacity Provider
-  # -------------------------
+  #########################################
   CapacityProvider:
     Type: AWS::ECS::CapacityProvider
     Properties:
@@ -100,10 +106,9 @@ Resources:
         - CapacityProvider: !Ref CapacityProvider
           Weight: 1
 
-#########################################
-# Outputs
-#########################################
-
+  #########################################
+  # Outputs
+  #########################################
 Outputs:
   ClusterName:
     Value: !Ref ECSCluster
