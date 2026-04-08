@@ -74,6 +74,7 @@ Resources:
         Location: !Ref GitHubRepoUrl
         BuildSpec: buildspec.yml
         GitCloneDepth: 1
+        SourceIdentifier: !Ref GitHubBranch
       Environment:
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_SMALL
