@@ -18,6 +18,12 @@ aws cloudformation deploy \
   --parameter-overrides GitHubRepoUrl=https://github.com/realAbdullah4504/system-design.git GitHubBranch=stage-4 \
   --capabilities CAPABILITY_NAMED_IAM
 
+aws cloudformation deploy \
+  --template-file cloudformation-sqs-sns-stack.yaml \
+  --stack-name sqs-sns-stack \
+  --parameter-overrides Environment=dev \
+  --capabilities CAPABILITY_NAMED_IAM
+
 
 ## SNS and SQS Setup
 aws sns create-topic \
