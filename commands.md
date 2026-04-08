@@ -1,3 +1,18 @@
+## Cloud-formation commands
+# Create key pair
+aws ec2 create-key-pair --key-name keypair --query 'KeyMaterial' --output text > keypair.pem
+ 
+# Set correct permissions
+chmod 400 keypair.pem
+ 
+# Then deploy with the key name
+aws cloudformation deploy \
+  --template-file formation.yaml \
+  --stack-name ecs-cluster \
+  --parameter-overrides ClusterName=my-production-cluster DesiredCapacity=2 KeyName=keypair \
+  --capabilities CAPABILITY_NAMED_IAM
+
+
 ## SNS and SQS Setup
 aws sns create-topic \
     --name loadtest-events-topic
@@ -34,7 +49,7 @@ curl -v https://sqs.us-east-1.amazonaws.com
 
 
 ## creating ecr repository
-aws ecr create-repository --repository-name system-design-notification-worker --region ap-south-1
+aws ecr create-repository --repository-name system-design-notification-worker --region us-east-1
 
 
 
