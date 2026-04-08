@@ -1,0 +1,105 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: ECS Cluster Resources
+
+Parameters:
+  DesiredCapacity:
+    Type: Number
+    Default: 1
+    Description: Initial number of EC2 instances
+  KeyName:
+    Type: String
+    Default: keypair
+    Description: Name of existing EC2 KeyPair (without .pem)
+
+Resources:
+
+  # -------------------------
+  # ECS Cluster
+  # -------------------------
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: ecs-cluster
+
+  # -------------------------
+  # IAM Role for EC2
+  # -------------------------
+  ECSInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+
+  ECSInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref ECSInstanceRole
+
+  # -------------------------
+  # Launch Template (EC2)
+  # -------------------------
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        InstanceType: t3.nano
+        KeyName: !Ref KeyName
+        ImageId: ami-0c02fb55956c7d316  # Amazon Linux 2 (us-east-1)
+        IamInstanceProfile:
+          Name: !Ref ECSInstanceProfile
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
+
+  # -------------------------
+  # Auto Scaling Group
+  # -------------------------
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MinSize: !Ref DesiredCapacity
+      MaxSize: 2
+      DesiredCapacity: !Ref DesiredCapacity
+      VPCZoneIdentifier:
+        - subnet-016fa8e2544040acd 
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+
+  # -------------------------
+  # Capacity Provider
+  # -------------------------
+  CapacityProvider:
+    Type: AWS::ECS::CapacityProvider
+    Properties:
+      Name: t3-nano-capacity-provider
+      AutoScalingGroupProvider:
+        AutoScalingGroupArn: !Ref AutoScalingGroup
+        ManagedScaling:
+          Status: ENABLED
+          TargetCapacity: 100
+
+  ClusterCapacityProviderAssociation:
+    Type: AWS::ECS::ClusterCapacityProviderAssociations
+    Properties:
+      Cluster: !Ref ECSCluster
+      CapacityProviders:
+        - !Ref CapacityProvider
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: !Ref CapacityProvider
+          Weight: 1
+
+Outputs:
+  ClusterName:
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub "${AWS::StackName}-ClusterName"
