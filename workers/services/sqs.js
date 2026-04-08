@@ -1,5 +1,22 @@
-import { SendMessageCommand, ReceiveMessageCommand, DeleteMessageCommand } from "@aws-sdk/client-sqs";
+import { SendMessageCommand, ReceiveMessageCommand, DeleteMessageCommand, GetQueueAttributesCommand } from "@aws-sdk/client-sqs";
 import { sqsClient, QUEUE_URL} from "../config/sqs.js";
+
+// Test SQS connection
+export const testSQSConnection = async () => {
+  try {
+    const command = new GetQueueAttributesCommand({
+      QueueUrl: QUEUE_URL,
+      AttributeNames: ["QueueArn"]
+    });
+    
+    const response = await sqsClient.send(command);
+    console.log("SQS connection successful:", response.Attributes?.QueueArn);
+    return true;
+  } catch (error) {
+    console.error("SQS connection failed:", error.message);
+    throw new Error(`SQS connection failed: ${error.message}`);
+  }
+};
 
 export const sendMessage = async (messageBody) => {
   const command = new SendMessageCommand({

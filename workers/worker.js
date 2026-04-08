@@ -1,4 +1,4 @@
-import { receiveMessages, deleteMessage } from "./services/sqs.js";
+import { receiveMessages, deleteMessage, testSQSConnection } from "./services/sqs.js";
 import { createTracingSDK } from "./config/otel.js";
 const sdk = createTracingSDK("worker-service");
 await sdk.start();
@@ -23,6 +23,15 @@ import {
   queueDepth
 } from "./services/prom.js";
 import "./metrics-server.js";
+
+// Test SQS connection on startup
+try {
+  await testSQSConnection();
+  logger.info('SQS connection test passed');
+} catch (error) {
+  logger.error('SQS connection test failed', { error: error.message });
+  process.exit(1);
+}
 
 // Worker type identifier
 const WORKER_TYPE = "main-worker";

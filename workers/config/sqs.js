@@ -8,4 +8,8 @@ export const QUEUE_URL = process.env.SQS_QUEUE_URL;
 
 export const sqsClient = new SQSClient({
   region: REGION,
+  // credentials: {
+  //   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  //   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  // },
 });

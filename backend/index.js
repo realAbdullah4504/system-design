@@ -109,7 +109,7 @@ app.post("/events/send", async (req, res) => {
 
   try {
       logger.info('Publishing to SNS', { topicArn: process.env.TOPIC_ARN, type });
-      // await publishJobEvent({ type, payload });
+      await publishJobEvent({ type, payload });
       logger.info('Successfully published to SNS', { type });
 
     res.json({
