@@ -14,12 +14,26 @@ Parameters:
 Resources:
 
   #########################################
-  # ECR Repository
+  # ECR Repositories
   #########################################
   ECRRepository:
     Type: AWS::ECR::Repository
     Properties:
       RepositoryName: system-design-api
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  NotificationWorkerECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: notification-worker
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  MainWorkerECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: main-worker
       ImageScanningConfiguration:
         ScanOnPush: true
 
@@ -106,6 +120,12 @@ Outputs:
   ECRRepositoryName:
     Value: !Ref ECRRepository
     Description: Name of the ECR repository
+  NotificationWorkerECRRepositoryName:
+    Value: !Ref NotificationWorkerECRRepository
+    Description: Name of the notification worker ECR repository
+  MainWorkerECRRepositoryName:
+    Value: !Ref MainWorkerECRRepository
+    Description: Name of the main worker ECR repository
   CodeBuildProjectName:
     Value: !Ref BackendCodeBuildProject
     Description: Name of the CodeBuild project
