@@ -3,6 +3,10 @@ phases:
   pre_build:
     commands:
       - echo Logging in to Amazon ECR...
+      - echo AWS_ACCOUNT_ID: $AWS_ACCOUNT_ID
+      - echo AWS_DEFAULT_REGION: $AWS_DEFAULT_REGION
+      - echo IMAGE_REPO_NAME: $IMAGE_REPO_NAME
+      - echo IMAGE_TAG: $IMAGE_TAG
       - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
   build:
     commands:
@@ -14,7 +18,9 @@ phases:
     commands:
       - echo Build completed on `date`
       - echo Pushing the Docker image...
-      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
+      - echo Full image URI: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG
+      - docker images
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG || echo "Docker push failed with exit code $?"
       - echo Writing image definitions file...
       - printf '[{"name":"backend-container","imageUri":"%s"}]' $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME:$IMAGE_TAG > imagedefinitions.json
 artifacts:

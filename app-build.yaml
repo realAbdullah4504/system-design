@@ -52,6 +52,10 @@ Resources:
                   - ecr:PutImage
                   - ecr:BatchGetImage
                   - ecr:GetDownloadUrlForLayer
+                  - ecr:CreateRepository
+                  - ecr:DescribeRepositories
+                  - ecr:ListImages
+                  - ecr:DeleteRepository
                 Resource: '*'
         - PolicyName: CloudWatchLogs-Policy
           PolicyDocument:
@@ -85,7 +89,7 @@ Resources:
           - Name: AWS_ACCOUNT_ID
             Value: !Ref AWS::AccountId
           - Name: IMAGE_REPO_NAME
-            Value: !Ref ECRRepository
+            Value: system-design-api
           - Name: IMAGE_TAG
             Value: latest
           - Name: BRANCH
