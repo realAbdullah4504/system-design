@@ -87,7 +87,7 @@ Resources:
       Source:
         Type: GITHUB
         Location: !Ref GitHubRepoUrl
-        BuildSpec: buildspec.yml
+        BuildSpec: deployment/buildspec.yml
         GitCloneDepth: 1
       SourceVersion: !Ref GitHubBranch
       Environment:
