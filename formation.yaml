@@ -1,38 +1,42 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Minimal ECS Cluster with EC2 (t3.nano) + Fargate
+Description: Minimal ECS Fargate Cluster
 
 Parameters:
-  DesiredCapacity:
-    Type: Number
-    Default: 1
-    Description: Initial number of EC2 instances
-  KeyName:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID for ECS resources
+    Default: subnet-016fa8e2544040acd  # Replace with your default subnet ID
+  ImageTag:
     Type: String
-    Default: keypair
-    Description: Name of existing EC2 KeyPair (without .pem)
-  GitHubRepoUrl:
+    Description: Image tag for the backend service
+    Default: 47464652f0f80eb83be3f16af019d3c19bbf8fdd
+  MongoUri:
     Type: String
-    Default: https://github.com/realAbdullah4504/system-design.git
-    Description: GitHub repository URL (e.g., https://github.com/username/repo.git)
-  GitHubBranch:
+    Description: MongoDB connection URI
+    NoEcho: true
+  AwsRegion:
     Type: String
-    Default: stage-4
-    Description: GitHub branch to build from
+    Default: us-east-1
+    Description: AWS Region
+  SqsQueueUrl:
+    Type: String
+    Description: SQS Queue URL
+    NoEcho: true
+  TopicArn:
+    Type: String
+    Description: SNS Topic ARN
+    NoEcho: true
 
 Resources:
-
-  #########################################
-  # ECS Cluster
-  #########################################
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: ecs-cluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
 
-  #########################################
-  # IAM Role for EC2
-  #########################################
-  ECSInstanceRole:
+  ECSExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -40,75 +44,119 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Path: /
 
-  ECSInstanceProfile:
-    Type: AWS::IAM::InstanceProfile
+  ECSTaskRole:
+    Type: AWS::IAM::Role
     Properties:
-      Roles:
-        - !Ref ECSInstanceRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
 
-  #########################################
-  # Launch Template (EC2)
-  #########################################
-  LaunchTemplate:
-    Type: AWS::EC2::LaunchTemplate
+  BackendLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      LaunchTemplateData:
-        InstanceType: t3.nano
-        KeyName: !Ref KeyName
-        ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 (us-east-1)
-        IamInstanceProfile:
-          Name: !Ref ECSInstanceProfile
-        UserData: !Base64
-          Fn::Sub: |
-            #!/bin/bash
-            echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
+      LogGroupName: /ecs/backend-task
+      RetentionInDays: 7
 
-  #########################################
-  # Auto Scaling Group
-  #########################################
-  AutoScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
+  BackendTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
     Properties:
-      MinSize: !Ref DesiredCapacity
-      MaxSize: 2
-      DesiredCapacity: !Ref DesiredCapacity
-      VPCZoneIdentifier:
-        - subnet-016fa8e2544040acd
-      LaunchTemplate:
-        LaunchTemplateId: !Ref LaunchTemplate
-        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      Family: backend-task
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: 
+        Fn::GetAtt: [ECSExecutionRole, Arn]
+      TaskRoleArn: 
+        Fn::GetAtt: [ECSTaskRole, Arn]
+      ContainerDefinitions:
+        - Name: backend-container
+          Image: 
+            Fn::Sub: '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/api-service-repo:${ImageTag}'
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: AWS_REGION
+              Value: !Ref AwsRegion
+            - Name: SQS_QUEUE_URL
+              Value: !Ref SqsQueueUrl
+            - Name: TOPIC_ARN
+              Value: !Ref TopicArn
+            - Name: MONGO_URI
+              Value: !Ref MongoUri
+            - Name: REDIS_HOST
+              Value: redis-18619.c283.us-east-1-4.ec2.cloud.redislabs.com
+            - Name: REDIS_PORT
+              Value: "18619"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref BackendLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
 
-  #########################################
-  # Capacity Provider
-  #########################################
-  CapacityProvider:
-    Type: AWS::ECS::CapacityProvider
+  BackendService:
+    Type: AWS::ECS::Service
     Properties:
-      Name: t3-nano-capacity-provider
-      AutoScalingGroupProvider:
-        AutoScalingGroupArn: !Ref AutoScalingGroup
-        ManagedScaling:
-          Status: ENABLED
-          TargetCapacity: 100
-
-  ClusterCapacityProviderAssociation:
-    Type: AWS::ECS::ClusterCapacityProviderAssociations
-    Properties:
+      ServiceName: backend-service
       Cluster: !Ref ECSCluster
-      CapacityProviders:
-        - !Ref CapacityProvider
-      DefaultCapacityProviderStrategy:
-        - CapacityProvider: !Ref CapacityProvider
-          Weight: 1
+      TaskDefinition: !Ref BackendTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref SubnetId
+          AssignPublicIp: ENABLED
 
-  #########################################
-  # Outputs
-  #########################################
 Outputs:
-  ClusterName:
-    Value: !Ref ECSCluster
+  ECSClusterName:
+    Description: ECS Cluster Name
+    Value:
+      Ref: ECSCluster
+    Export:
+      Name: 
+        Fn::Sub: '${AWS::StackName}-ECSCluster'
+  ECSExecutionRoleArn:
+    Description: ECS Task Execution Role ARN
+    Value: 
+      Fn::GetAtt: [ECSExecutionRole, Arn]
+    Export:
+      Name: 
+        Fn::Sub: '${AWS::StackName}-ECSExecutionRole'
+  ECSTaskRoleArn:
+    Description: ECS Task Role ARN
+    Value: 
+      Fn::GetAtt: [ECSTaskRole, Arn]
+    Export:
+      Name: 
+        Fn::Sub: '${AWS::StackName}-ECSTaskRole'
+  BackendTaskDefinitionArn:
+    Description: Backend Task Definition ARN
+    Value: 
+      Ref: BackendTaskDefinition
+    Export:
+      Name: 
+        Fn::Sub: '${AWS::StackName}-BackendTaskDefinition'
+  BackendServiceName:
+    Description: Backend Service Name
+    Value: 
+      Ref: BackendService
+    Export:
+      Name: 
+        Fn::Sub: '${AWS::StackName}-BackendService'
