@@ -44320,3 +44320,6 @@
 {"environment":"development","instanceId":"Abdullah-pc","level":"info","message":"Worker metrics server started","port":4000,"service":"worker-service","timestamp":"I1O8601","version":"1.0.0"}
 {"environment":"development","instanceId":"Abdullah-pc","level":"info","message":"Starting worker","service":"worker-service","timestamp":"I9O8601","version":"1.0.0"}
 {"environment":"development","instanceId":"Abdullah-pc","level":"info","message":"Worker metrics server started","port":4000,"service":"worker-service","timestamp":"I9O8601","version":"1.0.0"}
+{"environment":"development","instanceId":"Abdullah-pc","level":"info","message":"Worker metrics server started","port":4000,"service":"worker-service","timestamp":"I6O8601","version":"1.0.0"}
+{"environment":"development","instanceId":"Abdullah-pc","level":"info","message":"SQS connection test passed","service":"worker-service","timestamp":"I3O8601","version":"1.0.0"}
+{"environment":"development","instanceId":"Abdullah-pc","level":"info","message":"Starting worker","service":"worker-service","timestamp":"I3O8601","version":"1.0.0"}
