@@ -30,19 +30,6 @@ Parameters:
     Type: String
     Description: SNS Topic ARN
     NoEcho: true
-  RedisHost:
-    Type: String
-    Description: Redis host
-    Default: redis-18619.c283.us-east-1-4.ec2.cloud.redislabs.com
-  RedisPort:
-    Type: String
-    Description: Redis port
-    Default: "18619"
-  RedisPassword:
-    Type: String
-    Default: vfGsq0AJ84EjYk4hGFpHYimF6LE6YUvG
-    Description: Redis password
-    NoEcho: true
 
 Resources:
   ECSCluster:
@@ -143,11 +130,11 @@ Resources:
             - Name: MONGO_URI
               Value: !Ref MongoUri
             - Name: REDIS_HOST
-              Value: !Ref RedisHost
+              Value: redis-18619.c283.us-east-1-4.ec2.cloud.redislabs.com
             - Name: REDIS_PORT
-              Value: !Ref RedisPort
+              Value: "18619"
             - Name: REDIS_PASSWORD
-              Value: !Ref RedisPassword
+              Value: vfGsq0AJ84EjYk4hGFpHYimF6LE6YUvG
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -175,8 +162,6 @@ Resources:
           Environment:
             - Name: NODE_ENV
               Value: production
-            - Name: MONGO_URI
-              Value: !Ref MongoUri
             - Name: AWS_REGION
               Value: !Ref AwsRegion
             - Name: SQS_QUEUE_URL
@@ -184,12 +169,11 @@ Resources:
             - Name: TOPIC_ARN
               Value: !Ref TopicArn
             - Name: REDIS_HOST
-              Value: !Ref RedisHost
+              Value: redis-18619.c283.us-east-1-4.ec2.cloud.redislabs.com
             - Name: REDIS_PORT
-              Value: !Ref RedisPort
+              Value: "18619"
             - Name: REDIS_PASSWORD
-              Value: !Ref RedisPassword
-            
+              Value: vfGsq0AJ84EjYk4hGFpHYimF6LE6YUvG
           LogConfiguration:
             LogDriver: awslogs
             Options:

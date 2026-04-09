@@ -7,19 +7,19 @@ chmod 400 keypair.pem
  
 # Then deploy with the key name
 aws cloudformation deploy \
-  --template-file formation.yaml \
+  --template-file infrastructure/aws/cloudformation/ecs-cluster.yaml \
   --stack-name ecs-cluster \
   --parameter-overrides ClusterName=my-production-cluster DesiredCapacity=2 KeyName=keypair \
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation deploy \
-  --template-file app-build.yaml \
+  --template-file infrastructure/aws/cloudformation/app-build.yaml \
   --stack-name app-build \
   --parameter-overrides GitHubRepoUrl=https://github.com/realAbdullah4504/system-design.git GitHubBranch=stage-4 \
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation deploy \
-  --template-file cloudformation-sqs-sns-stack.yaml \
+  --template-file infrastructure/aws/cloudformation/cloudformation-sqs-sns-stack.yaml \
   --stack-name sqs-sns-stack \
   --parameter-overrides Environment=dev \
   --capabilities CAPABILITY_NAMED_IAM
