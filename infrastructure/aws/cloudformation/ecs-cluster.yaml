@@ -10,10 +10,10 @@ Parameters:
     Type: String
     Description: Image tag for the backend service
     Default: c8241589c88d1fd80d773fede4e0cb1e7ef73f1b
-  MongoUri:
+  EnvironmentName:
     Type: String
-    Description: MongoDB connection URI
-    NoEcho: true
+    Default: dev
+    Description: Environment name (dev, staging, prod)
   AwsRegion:
     Type: String
     Default: us-east-1
@@ -66,6 +66,16 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
       Path: /
+      Policies:
+        - PolicyName: SecretsManagerAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*"
 
   ECSTaskRole:
     Type: AWS::IAM::Role
@@ -120,17 +130,18 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: 
-        Fn::GetAtt: [ECSExecutionRole, Arn]
-      TaskRoleArn: 
-        Fn::GetAtt: [ECSTaskRole, Arn]
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
       ContainerDefinitions:
         - Name: backend-container
-          Image: 
-            Fn::Sub: '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/api-service-repo:${ImageTag}'
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/api-service-repo:${ImageTag}'
           PortMappings:
             - ContainerPort: 3000
               Protocol: tcp
+          Secrets:
+            - Name: MONGO_URI
+              ValueFrom: !ImportValue
+                Fn::Sub: "${EnvironmentName}-MongoDBPrimarySecretArn"
           Environment:
             - Name: NODE_ENV
               Value: production
@@ -140,8 +151,6 @@ Resources:
               Value: !Ref SqsQueueUrl
             - Name: TOPIC_ARN
               Value: !Ref TopicArn
-            - Name: MONGO_URI
-              Value: !Ref MongoUri
             - Name: REDIS_HOST
               Value: !Ref RedisHost
             - Name: REDIS_PORT
@@ -164,19 +173,18 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: 
-        Fn::GetAtt: [ECSExecutionRole, Arn]
-      TaskRoleArn: 
-        Fn::GetAtt: [ECSTaskRole, Arn]
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
       ContainerDefinitions:
         - Name: main-worker-container
-          Image: 
-            Fn::Sub: '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/main-worker:${ImageTag}'
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/main-worker:${ImageTag}'
+          Secrets:
+            - Name: MONGO_URI
+              ValueFrom: !ImportValue
+                Fn::Sub: "${EnvironmentName}-MongoDBPrimarySecretArn"
           Environment:
             - Name: NODE_ENV
               Value: production
-            - Name: MONGO_URI
-              Value: !Ref MongoUri
             - Name: AWS_REGION
               Value: !Ref AwsRegion
             - Name: SQS_QUEUE_URL
