@@ -25,6 +25,10 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM
 
 
+## AWS Secrets Manager
+aws secretsmanager get-secret-value --secret-id "job-system/dev/cache/redis-password" --region us-east-1
+
+
 ## SNS and SQS Setup
 aws sns create-topic \
     --name loadtest-events-topic

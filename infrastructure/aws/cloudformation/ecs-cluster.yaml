@@ -18,18 +18,6 @@ Parameters:
     Type: String
     Default: us-east-1
     Description: AWS Region
-  SqsQueueUrl:
-    Type: String
-    Description: SQS Queue URL
-    NoEcho: true
-  SqsQueueArn:
-    Type: String
-    Description: SQS Queue ARN
-    NoEcho: true
-  TopicArn:
-    Type: String
-    Description: SNS Topic ARN
-    NoEcho: true
   RedisHost:
     Type: String
     Description: Redis host
@@ -38,11 +26,6 @@ Parameters:
     Type: String
     Description: Redis port
     Default: "18619"
-  RedisPassword:
-    Type: String
-    Default: vfGsq0AJ84EjYk4hGFpHYimF6LE6YUvG
-    Description: Redis password
-    NoEcho: true
 
 Resources:
   ECSCluster:
@@ -96,7 +79,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - sns:Publish
-                Resource: !Ref TopicArn
+                Resource: 
+                  Fn::ImportValue: !Sub "${EnvironmentName}-LoadTestEventsTopicArn"
         - PolicyName: SQSAccessPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -107,7 +91,8 @@ Resources:
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
                   - sqs:GetQueueUrl
-                Resource: !Ref SqsQueueArn
+                Resource: 
+                  Fn::ImportValue: !Sub "${EnvironmentName}-MyAppJobsQueueArn"
 
   BackendLogGroup:
     Type: AWS::Logs::LogGroup
@@ -140,23 +125,29 @@ Resources:
               Protocol: tcp
           Secrets:
             - Name: MONGO_URI
-              ValueFrom: !ImportValue
-                Fn::Sub: "${EnvironmentName}-MongoDBPrimarySecretArn"
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-MongoDBPrimarySecretArn"
+            - Name: SQS_QUEUE_URL
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-SqsQueueUrlSecretArn"
+            - Name: SQS_QUEUE_ARN
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-SqsQueueArnSecretArn"
+            - Name: TOPIC_ARN
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-TopicArnSecretArn"
+            - Name: REDIS_PASSWORD
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-RedisPasswordSecretArn"
           Environment:
             - Name: NODE_ENV
               Value: production
             - Name: AWS_REGION
               Value: !Ref AwsRegion
-            - Name: SQS_QUEUE_URL
-              Value: !Ref SqsQueueUrl
-            - Name: TOPIC_ARN
-              Value: !Ref TopicArn
             - Name: REDIS_HOST
               Value: !Ref RedisHost
             - Name: REDIS_PORT
               Value: !Ref RedisPort
-            - Name: REDIS_PASSWORD
-              Value: !Ref RedisPassword
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -180,24 +171,29 @@ Resources:
           Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/main-worker:${ImageTag}'
           Secrets:
             - Name: MONGO_URI
-              ValueFrom: !ImportValue
-                Fn::Sub: "${EnvironmentName}-MongoDBPrimarySecretArn"
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-MongoDBPrimarySecretArn"
+            - Name: SQS_QUEUE_URL
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-SqsQueueUrlSecretArn"
+            - Name: SQS_QUEUE_ARN
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-SqsQueueArnSecretArn"
+            - Name: TOPIC_ARN
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-TopicArnSecretArn"
+            - Name: REDIS_PASSWORD
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-RedisPasswordSecretArn"
           Environment:
             - Name: NODE_ENV
               Value: production
             - Name: AWS_REGION
               Value: !Ref AwsRegion
-            - Name: SQS_QUEUE_URL
-              Value: !Ref SqsQueueUrl
-            - Name: TOPIC_ARN
-              Value: !Ref TopicArn
             - Name: REDIS_HOST
               Value: !Ref RedisHost
             - Name: REDIS_PORT
               Value: !Ref RedisPort
-            - Name: REDIS_PASSWORD
-              Value: !Ref RedisPassword
-            
           LogConfiguration:
             LogDriver: awslogs
             Options:
