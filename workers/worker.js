@@ -8,6 +8,7 @@ import "./config/mongo.js";
 import Event from "./models/event.js";
 import { publisher } from "./config/redis.js";
 import logger from "./config/logger.js";
+import CircuitBreaker from "./services/circuit-breaker.js";
 import { context, propagation, trace, SpanStatusCode } from "@opentelemetry/api";
 import {
   recordJobStart,
@@ -35,6 +36,19 @@ try {
 
 // Worker type identifier
 const WORKER_TYPE = "main-worker";
+
+// Circuit breaker instances
+const dbCircuitBreaker = new CircuitBreaker({
+  failureThreshold: 3,
+  resetTimeout: 30000, // 30 seconds
+  monitoringPeriod: 5000 // 5 seconds
+});
+
+const redisCircuitBreaker = new CircuitBreaker({
+  failureThreshold: 3,
+  resetTimeout: 30000, // 30 seconds
+  monitoringPeriod: 5000 // 5 seconds
+});
 
 // Track worker start time
 const workerStartTime = Date.now();
@@ -116,18 +130,24 @@ async function processMessage(message) {
       );
 
       logger.debug('Creating event in database');
-      const newEvent = await Event.create({
-        type: messageBody.type,
-        payload: messageBody.payload,
-      });
+      const newEvent = await dbCircuitBreaker.execute(
+        () => Event.create({
+          type: messageBody.type,
+          payload: messageBody.payload,
+        }),
+        'database-create'
+      );
       logger.info('Event created', { eventId: newEvent._id });
 
-      await publisher.publish(
-        "events",
-        JSON.stringify({
-          ...newEvent,
-          traceparent
-        })
+      await redisCircuitBreaker.execute(
+        () => publisher.publish(
+          "events",
+          JSON.stringify({
+            ...newEvent,
+            traceparent
+          })
+        ),
+        'redis-publish'
       );
       logger.debug('Published event to Redis');
 
@@ -153,6 +173,10 @@ async function processMessage(message) {
       const processingTimeMs = Date.now() - jobStartTime;
       const processingTimeSec = processingTimeMs / 1000;
       
+      // Log circuit breaker states if relevant
+      const dbState = dbCircuitBreaker.getState();
+      const redisState = redisCircuitBreaker.getState();
+      
       logger.error('Error processing message', { 
         messageId: message.MessageId,
         jobType: messageBody?.type || 'unknown',
@@ -162,8 +186,21 @@ async function processMessage(message) {
         stack: error.stack,
         name: error.name,
         queueUrl: QUEUE_URL,
-        queueArn: process.env.SQS_QUEUE_ARN || 'unknown'
+        queueArn: process.env.SQS_QUEUE_ARN || 'unknown',
+        circuitBreakers: {
+          database: dbState,
+          redis: redisState
+        }
       });
+      
+      // Record circuit breaker specific errors
+      if (error.message.includes('Circuit breaker is OPEN')) {
+        if (error.message.includes('database-create')) {
+          recordDatabaseError(WORKER_TYPE, 'circuit_breaker_open');
+        } else if (error.message.includes('redis-publish')) {
+          recordRedisError(WORKER_TYPE, 'circuit_breaker_open');
+        }
+      }
       
       // Record job failure
       recordJobFailure(jobTimer, WORKER_TYPE, messageBody?.type || 'unknown', error.name);
