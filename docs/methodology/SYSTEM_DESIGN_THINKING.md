@@ -144,6 +144,61 @@ You're trying to answer: "Should everything be modular?"
 **If YES → keep it** ✅
 **If NO → delete/simplify** ❌
 
+## 🔒 Vendor Lock-in (Where Abstraction Actually Matters)
+
+Vendor lock-in is not "using AWS".
+
+Vendor lock-in is when your core business flow cannot run without a specific vendor's primitives.
+
+### How to Think About It Using the Same Model
+
+1. 🔥 **What CHANGES frequently?**
+   - Vendor integrations change more than your business rules.
+   - Put vendor code behind a boundary.
+
+2. 🧱 **What is STABLE?**
+   - Your domain events, commands, and use-cases should stay stable.
+   - Keep them free of ARNs, SDK objects, and vendor-specific error types.
+
+3. 🔄 **What ORCHESTRATES?**
+   - Orchestrators can choose an implementation (AWS vs local vs another cloud).
+   - Orchestrators should depend on interfaces, not concrete SDKs.
+
+### Where Lock-in Usually Sneaks In
+
+- **Messaging**
+  - AWS SNS/SQS specifics: ARNs, message attributes format, FIFO semantics, visibility timeouts.
+- **Storage**
+  - Mongoose-specific queries are DB-coupling; acceptable, but recognize it.
+- **Cache / PubSub**
+  - Redis pub/sub semantics can leak into the domain.
+- **Observability**
+  - Good news: OpenTelemetry + Prometheus are open standards (low lock-in).
+  - Risk happens when code assumes a specific backend (e.g., hardcoded collector endpoints, vendor-only agents).
+
+### Concrete Guideline (Practical)
+
+Keep vendor SDK usage in a small number of modules.
+
+- **Core / domain code should depend on**
+  - `publishEvent(event)`
+  - `enqueueJob(job)`
+  - `storeEvent(record)`
+
+- **Vendor adapters implement**
+  - SNS publisher
+  - SQS queue
+  - Mongo repository
+  - Redis event bus
+
+### Quick Checklist (If you answer YES, you're drifting into lock-in)
+
+1. Do my use-cases take vendor objects as inputs/outputs?
+2. Do I pass around ARNs/queue URLs outside a config/adapters layer?
+3. Do I catch vendor-specific errors in business logic?
+4. Can I run the system locally with a fake/in-memory implementation without rewriting flows?
+5. Can I swap SNS/SQS for another broker by changing only wiring + adapter code?
+
 ## 🧩 A Better Mental Model (Senior Level)
 
 Think in 3 buckets instead of folders:
