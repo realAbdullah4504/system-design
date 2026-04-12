@@ -1,6 +1,7 @@
 # System Design Project
 
 A comprehensive MERN stack system with ECS Fargate deployment, monitoring, and CI/CD pipeline.
+VENDER Locking left for future reference
 
 ## 🏗️ Project Structure
 

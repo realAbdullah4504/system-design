@@ -8,6 +8,10 @@ export const testSQSConnection = async () => {
       QueueUrl: QUEUE_URL,
       AttributeNames: ["QueueArn"]
     });
+
+    // const simulatedError = new Error('Connection timeout');
+    // simulatedError.code = 'ETIMEDOUT';
+    // throw simulatedError;
     
     const response = await sqsClient.send(command);
     console.log("SQS connection successful:", response.Attributes?.QueueArn);

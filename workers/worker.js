@@ -9,6 +9,7 @@ import Event from "./models/event.js";
 import { publisher } from "./config/redis.js";
 import logger from "./config/logger.js";
 import CircuitBreaker from "./services/circuit-breaker.js";
+import RetryService from "./services/retry-service.js";
 import { context, propagation, trace, SpanStatusCode } from "@opentelemetry/api";
 import {
   recordJobStart,
@@ -31,15 +32,6 @@ import {
 } from "./services/prom.js";
 import "./metrics-server.js";
 
-// Test SQS connection on startup
-try {
-  await testSQSConnection();
-  logger.info('SQS connection test passed');
-} catch (error) {
-  logger.error('SQS connection test failed', { error: error.message });
-  process.exit(1);
-}
-
 // Worker type identifier
 const WORKER_TYPE = "main-worker";
 
@@ -58,9 +50,30 @@ const redisCircuitBreaker = new CircuitBreaker({
   monitoringPeriod: 5000 // 5 seconds
 });
 
+// Retry service for SQS operations
+const sqsRetryService = new RetryService({
+  maxRetries: 3,
+  baseDelay: 500,
+  maxDelay: 5000,
+  retryableErrors: ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ServiceUnavailable', 'RequestTimeout']
+});
+
 // Initialize circuit breaker monitoring
 setCircuitBreakerState(WORKER_TYPE, 'database', dbCircuitBreaker.getState().state);
 setCircuitBreakerState(WORKER_TYPE, 'redis', redisCircuitBreaker.getState().state);
+
+// Test SQS connection on startup
+try {
+  await sqsRetryService.execute(() => testSQSConnection(), {
+    operationName: 'test-connection',
+    maxRetries: 5,
+    baseDelay: 1000
+  });
+  logger.info('SQS connection test passed');
+} catch (error) {
+  logger.error('SQS connection test failed', { error: error.message });
+  process.exit(1);
+}
 
 // Track worker start time
 const workerStartTime = Date.now();
@@ -188,7 +201,10 @@ async function processMessage(message) {
       // Record job success
       recordJobSuccess(jobTimer, WORKER_TYPE, messageBody.type);
 
-      await deleteMessage(QUEUE_URL, message.ReceiptHandle);
+      await sqsRetryService.execute(() => deleteMessage(QUEUE_URL, message.ReceiptHandle), {
+        operationName: 'delete-message',
+        maxRetries: 2 // Fewer retries for delete since message is already processed
+      });
     } catch (error) {
       // Calculate processing time even for failures
       const processingTimeMs = Date.now() - jobStartTime;
@@ -274,7 +290,9 @@ async function pollQueue() {
   while (true) {
     try {
       logger.debug('Polling queue', { queueUrl: QUEUE_URL });
-      const data = await receiveMessages(QUEUE_URL);
+      const data = await sqsRetryService.execute(() => receiveMessages(QUEUE_URL), {
+        operationName: 'receive-messages'
+      });
 
       // Update queue depth metric
       if (data.Messages) {
