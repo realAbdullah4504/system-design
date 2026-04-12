@@ -49,7 +49,12 @@ Define a minimal but clear system design before writing code.
    - DB: MongoDB Atlas
    - Scaling: CPU / Queue depth
 
-4. **Failure Points**
+4. **Vendor Boundaries (Anti Lock-in)**
+   - Decide what parts are "vendor adapters" vs "domain logic"
+   - Keep cloud SDKs (AWS/GCP/etc.) inside adapter modules only
+   - Make provider selection a config decision (env/config), not a code rewrite
+
+5. **Failure Points**
    - Queue backlog
    - Worker crashes
    - Message retries
@@ -59,6 +64,10 @@ Define a minimal but clear system design before writing code.
 - Do NOT over-design
 - Do NOT define every edge case
 - Do NOT write full production architecture
+
+- Do NOT let vendor primitives leak into domain flows
+  - No ARNs/queue URLs/SDK objects in use-cases
+  - No vendor-specific errors handled in business logic
 
 👉 This is a control layer, not a full spec
 

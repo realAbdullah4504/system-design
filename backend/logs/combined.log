@@ -1,0 +1,2 @@
+{"environment":"development","instanceId":"Abdullah-pc","level":"info","message":"API server started","port":3000,"service":"api-service","timestamp":"I4O8601","version":"1.0.0"}
+{"channel":"events","environment":"development","instanceId":"Abdullah-pc","level":"info","message":"Redis subscription message received","service":"api-service","timestamp":"I6O8601","version":"1.0.0"}
