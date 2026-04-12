@@ -39,7 +39,7 @@ const WORKER_TYPE = "main-worker";
 
 // Circuit breaker instances
 const dbCircuitBreaker = new CircuitBreaker({
-  failureThreshold: 3,
+  failureThreshold: 1,
   resetTimeout: 30000, // 30 seconds
   monitoringPeriod: 5000 // 5 seconds
 });
