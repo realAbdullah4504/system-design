@@ -18,8 +18,14 @@ import {
   setWorkerHealth,
   recordException,
   recordDatabaseError,
+  recordDatabaseOperationStart,
+  recordDatabaseOperationSuccess,
+  recordDatabaseOperationFailure,
   recordRedisError,
   recordSQSError,
+  setCircuitBreakerState,
+  recordCircuitBreakerFailure,
+  recordCircuitBreakerOperation,
   workerUptime,
   queueDepth
 } from "./services/prom.js";
@@ -39,16 +45,22 @@ const WORKER_TYPE = "main-worker";
 
 // Circuit breaker instances
 const dbCircuitBreaker = new CircuitBreaker({
+  name: 'database',
   failureThreshold: 1,
   resetTimeout: 30000, // 30 seconds
   monitoringPeriod: 5000 // 5 seconds
 });
 
 const redisCircuitBreaker = new CircuitBreaker({
+  name: 'redis',
   failureThreshold: 3,
   resetTimeout: 30000, // 30 seconds
   monitoringPeriod: 5000 // 5 seconds
 });
+
+// Initialize circuit breaker monitoring
+setCircuitBreakerState(WORKER_TYPE, 'database', dbCircuitBreaker.getState().state);
+setCircuitBreakerState(WORKER_TYPE, 'redis', redisCircuitBreaker.getState().state);
 
 // Track worker start time
 const workerStartTime = Date.now();
@@ -130,13 +142,22 @@ async function processMessage(message) {
       );
 
       logger.debug('Creating event in database');
-      const newEvent = await dbCircuitBreaker.execute(
-        () => Event.create({
-          type: messageBody.type,
-          payload: messageBody.payload,
-        }),
-        'database-create'
-      );
+      const dbOp = 'event_create';
+      const dbTimer = recordDatabaseOperationStart(WORKER_TYPE, dbOp);
+      let newEvent;
+      try {
+        newEvent = await dbCircuitBreaker.execute(
+          () => Event.create({
+            type: messageBody.type,
+            payload: messageBody.payload,
+          }),
+          'database-create'
+        );
+        recordDatabaseOperationSuccess(dbTimer, WORKER_TYPE, dbOp);
+      } catch (dbError) {
+        recordDatabaseOperationFailure(dbTimer, WORKER_TYPE, dbOp);
+        throw dbError;
+      }
       logger.info('Event created', { eventId: newEvent._id });
 
       await redisCircuitBreaker.execute(
