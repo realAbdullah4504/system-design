@@ -8,6 +8,7 @@ import "./config/mongo.js";
 import Event from "./models/event.js";
 import { publisher } from "./config/redis.js";
 import logger from "./config/logger.js";
+import sessionReader from "./services/session-reader.js";
 import CircuitBreaker from "./services/circuit-breaker.js";
 import RetryService from "./services/retry-service.js";
 import { context, propagation, trace, SpanStatusCode } from "@opentelemetry/api";
@@ -132,21 +133,38 @@ async function processMessage(message) {
     
     logger.debug('Started span', { traceId: span.spanContext().traceId });
     let jobStartTime;
-    const messageBody = JSON.parse(snsMessage.Message);
+    let messageBody = JSON.parse(snsMessage.Message);
     const jobTimer = recordJobStart(WORKER_TYPE, messageBody.type);
     jobStartTime = Date.now();
 
     try {
+      // Enrich message with session context if sessionId is provided
+      if (messageBody.sessionId) {
+        console.log('messageBody', messageBody);
+        messageBody = await sessionReader.enrichMessageWithSession(messageBody, messageBody.sessionId);
+        logger.debug('Message enriched with session context', { 
+          sessionId: messageBody.sessionId,
+          hasUser: !!messageBody.sessionContext?.user
+        });
+      }
+
       logger.debug('Parsed message body', { type: messageBody.type, hasPayload: !!messageBody.payload });
 
       logger.info('Job processing started', { 
         messageId: message.MessageId, 
         jobType: messageBody.type,
-        startTime: jobStartTime
+        startTime: jobStartTime,
+        sessionId: messageBody.sessionId
       });
       
       span.setAttribute("job.type", messageBody.type);
       span.setAttribute("sqs.message_id", message.MessageId);
+      if (messageBody.sessionId) {
+        span.setAttribute("session.id", messageBody.sessionId);
+        if (messageBody.sessionContext?.user?.id) {
+          span.setAttribute("user.id", messageBody.sessionContext.user.id);
+        }
+      }
 
       // Simulate work
       logger.debug('Simulating work', { duration: messageBody.duration || 100 });
@@ -163,6 +181,8 @@ async function processMessage(message) {
           () => Event.create({
             type: messageBody.type,
             payload: messageBody.payload,
+            sessionId: messageBody.sessionId,
+            sessionContext: messageBody.sessionContext,
           }),
           'database-create'
         );

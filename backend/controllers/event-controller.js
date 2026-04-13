@@ -5,9 +5,9 @@ class EventController {
   async getAllEvents(req, res) {
     try {
       logger.info('Fetching all events');
-      const events = await Event.find().sort({ createdAt: -1 });
-      logger.info('Events fetched successfully', { count: events.length });
-      res.json(events);
+      // const events = await Event.find().sort({ createdAt: -1 });
+      logger.info('Events fetched successfully', { count: 0 });
+      res.json({ events: [], user: req.user });
     } catch (err) {
       logger.error('Error fetching events', { error: err.message, stack: err.stack });
       res.status(500).json({ error: "Error fetching events" });
@@ -26,12 +26,13 @@ class EventController {
 
     try {
       logger.info('Publishing to SNS', { topicArn: process.env.TOPIC_ARN, type });
-      await publishJobEvent({ type, payload });
+      await publishJobEvent({ type, payload, sessionId: req.cookies?.sessionId || null });
       logger.info('Successfully published to SNS', { type });
 
       res.json({
         message: "Event sent successfully",
         type: type,
+        sessionId: req.cookies?.sessionId || null,
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
