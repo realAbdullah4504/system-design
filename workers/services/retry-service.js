@@ -23,7 +23,7 @@ class RetryService {
     let attempt = 0;
 
     while (attempt <= options.maxRetries) {
-      
+      const operationName = options.operationName || 'unknown';
       try {
         return await operation();
       } catch (error) {
