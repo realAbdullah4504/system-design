@@ -1,15 +1,13 @@
 import { SQSClient } from "@aws-sdk/client-sqs";
-import dotenv from "dotenv";
+import { config } from "./env.js";
 
-dotenv.config();
-
-export const REGION = process.env.AWS_REGION || "us-east-1";
-export const QUEUE_URL = process.env.SQS_QUEUE_URL;
+export const REGION = config.aws.region || "us-east-1";
+export const QUEUE_URL = config.aws.sqs.queueUrl;
 
 export const sqsClient = new SQSClient({
-  region: REGION,
+  region: config.aws.region,
   // credentials: {
-  //   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  //   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  //   accessKeyId: config.aws.accessKeyId,
+  //   secretAccessKey: config.aws.secretAccessKey,
   // },
 });
