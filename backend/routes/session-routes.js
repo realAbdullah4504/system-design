@@ -22,7 +22,12 @@ router.post('/sessions/:sessionId/refresh', sessionController.refreshSession.bin
 // Get current session (requires session middleware)
 router.get('/current', sessionMiddleware, (req, res) => {
   if (!req.session) {
-    return res.status(401).json({ error: 'No active session' });
+    // Return 200 with null session - frontend will create new session
+    return res.json({ 
+      sessionId: null,
+      user: null,
+      lastAccessed: null
+    });
   }
   
   res.json({

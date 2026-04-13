@@ -26,6 +26,8 @@ function App() {
       if (response.ok) {
         const sessionData = await response.json();
         setSession(sessionData);
+        // Store sessionId in localStorage
+        localStorage.setItem('sessionId', sessionData.sessionId);
         console.log("Session created:", sessionData);
         return sessionData.sessionId;
       } else {
@@ -40,8 +42,18 @@ function App() {
 
   // Fetch initial events
   const fetchEvents = () => {
+    const sessionId = localStorage.getItem('sessionId');
+    const headers = {
+      "Content-Type": "application/json",
+    };
+    
+    // Add sessionId to headers if exists
+    if (sessionId) {
+      headers['x-session-id'] = sessionId;
+    }
+
     fetch("http://localhost:3000/api/events", {
-      credentials: "include" // Include cookies for session
+      headers
     })
       .then((res) => res.json())
       .then((data) => {
@@ -57,10 +69,47 @@ function App() {
 
   // Initialize session and setup SSE connection
   useEffect(() => {
-    // Create session first, then fetch events
+    // Check for existing session first, then create if needed
     const initializeApp = async () => {
       setSessionLoading(true);
-      await createSession();
+      
+      // First check localStorage, then validate with server
+      const storedSessionId = localStorage.getItem('sessionId');
+      
+      if (storedSessionId) {
+        // Validate stored session with server
+        try {
+          const response = await fetch("http://localhost:3000/api/current", {
+            headers: {
+              'x-session-id': storedSessionId
+            }
+          });
+          
+          if (response.ok) {
+            const sessionData = await response.json();
+            if (sessionData.sessionId) {
+              setSession(sessionData);
+              console.log("Existing session found:", sessionData);
+            } else {
+              // Session invalid, clear localStorage and create new one
+              console.log("Stored session invalid, creating new one");
+              localStorage.removeItem('sessionId');
+              await createSession();
+            }
+          } else {
+            console.log("Session validation failed, creating new one");
+            await createSession();
+          }
+        } catch {
+          console.log("Session check failed, creating new one");
+          await createSession();
+        }
+      } else {
+        // No stored session, create new one
+        console.log("No stored session, creating new one");
+        await createSession();
+      }
+      
       setSessionLoading(false);
       fetchEvents();
     };
@@ -113,12 +162,19 @@ function App() {
 
   const sendEvent = async () => {
     try {
+      const sessionId = localStorage.getItem('sessionId');
+      const headers = {
+        "Content-Type": "application/json",
+      };
+      
+      // Add sessionId to headers if exists
+      if (sessionId) {
+        headers['x-session-id'] = sessionId;
+      }
+
       const response = await fetch("http://localhost:3000/api/events/send", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include", // Include cookies for session
+        headers,
         body: JSON.stringify({
           type: "test_event",
           payload: {

@@ -27,13 +27,13 @@ class EventController {
 
     try {
       logger.info('Publishing to SNS', { topicArn: process.env.TOPIC_ARN, type });
-      await publishJobEvent({ type, payload, sessionId: req.cookies?.sessionId || null });
+      await publishJobEvent({ type, payload, sessionId: req.session?.id || null });
       logger.info('Successfully published to SNS', { type });
 
       res.json({
         message: "Event sent successfully",
         type: type,
-        sessionId: req.cookies?.sessionId || null,
+        sessionId: req.session?.id || null,
         timestamp: new Date().toISOString(),
       });
     } catch (err) {
