@@ -3,20 +3,71 @@ import React,{ useEffect, useState } from "react";
 function App() {
   const [events, setEvents] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [session, setSession] = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+
+  // Create session on page load
+  const createSession = async () => {
+    try {
+      const response = await fetch("http://localhost:3000/api/sessions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user: {
+            id: "frontend-user-" + Math.random().toString(36).substr(2, 9),
+            name: "Frontend User",
+            email: "user@example.com"
+          }
+        }),
+      });
+
+      if (response.ok) {
+        const sessionData = await response.json();
+        setSession(sessionData);
+        console.log("Session created:", sessionData);
+        return sessionData.sessionId;
+      } else {
+        console.error("Failed to create session");
+        return null;
+      }
+    } catch (err) {
+      console.error("Error creating session:", err);
+      return null;
+    }
+  };
 
   // Fetch initial events
   const fetchEvents = () => {
-    fetch("http://localhost:3000/events")
+    fetch("http://localhost:3000/api/events", {
+      credentials: "include" // Include cookies for session
+    })
       .then((res) => res.json())
-      .then((data) => setEvents(data))
+      .then((data) => {
+        if (data.events) {
+          setEvents(data.events);
+        }
+        if (data.user) {
+          setSession({ user: data.user });
+        }
+      })
       .catch((err) => console.error(err));
   };
 
-  // Setup SSE connection
+  // Initialize session and setup SSE connection
   useEffect(() => {
-    fetchEvents();
+    // Create session first, then fetch events
+    const initializeApp = async () => {
+      setSessionLoading(true);
+      await createSession();
+      setSessionLoading(false);
+      fetchEvents();
+    };
+    
+    initializeApp();
 
-    const eventSource = new EventSource("http://localhost:3000/events/stream");
+    const eventSource = new EventSource("http://localhost:3000/api/events/stream");
     
     eventSource.onopen = () => {
       console.log("SSE connection opened");
@@ -26,6 +77,7 @@ function App() {
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        console.log("SSE message:", data);
         
         if (data.type === "connected") {
           console.log("Connected to event stream:", data.timestamp);
@@ -61,16 +113,18 @@ function App() {
 
   const sendEvent = async () => {
     try {
-      const response = await fetch("http://localhost:3000/events/send", {
+      const response = await fetch("http://localhost:3000/api/events/send", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include", // Include cookies for session
         body: JSON.stringify({
           type: "test_event",
           payload: {
             message: "Hello from frontend",
             timestamp: new Date().toISOString(),
+            user: session?.user || null,
           },
         }),
       });
@@ -84,11 +138,28 @@ function App() {
       console.error("Error sending event:", err);
     }
   };
-console.log(events)
-  return (
+return (
     <div style={{ padding: "20px" }}>
       <h1>Events</h1>
       
+      {/* Session Status */}
+      <div style={{ 
+        padding: "10px", 
+        marginBottom: "20px", 
+        backgroundColor: session ? "#d1ecf1" : "#f8d7da",
+        borderRadius: "5px",
+        border: `1px solid ${session ? "#bee5eb" : "#f5c6cb"}`
+      }}>
+        <span style={{ 
+          color: session ? "#0c5460" : "#721c24",
+          fontWeight: "bold"
+        }}>
+          {sessionLoading ? "🔄 Creating session..." : 
+           session ? `👤 Logged in as: ${session.user?.name || session.user?.id || "Unknown User"}` : 
+           "🔴 No session"}
+        </span>
+      </div>
+
       {/* Connection Status */}
       <div style={{ 
         padding: "10px", 
@@ -107,17 +178,19 @@ console.log(events)
 
       <button 
         onClick={sendEvent}
+        disabled={!session || sessionLoading}
         style={{
           padding: "10px 20px",
-          backgroundColor: "#007bff",
+          backgroundColor: session && !sessionLoading ? "#007bff" : "#6c757d",
           color: "white",
           border: "none",
           borderRadius: "5px",
-          cursor: "pointer",
-          marginBottom: "20px"
+          cursor: session && !sessionLoading ? "pointer" : "not-allowed",
+          marginBottom: "20px",
+          opacity: session && !sessionLoading ? 1 : 0.6
         }}
       >
-        Send Test Event
+        {sessionLoading ? "Creating Session..." : session ? "Send Test Event" : "Please wait..."}
       </button>
       
       <div style={{ marginBottom: "10px" }}>

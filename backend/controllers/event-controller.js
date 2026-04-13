@@ -1,13 +1,14 @@
 import { publishJobEvent } from "../services/sns.js";
 import logger from "../config/logger.js";
+import Event from "../models/event.js";
 
 class EventController {
   async getAllEvents(req, res) {
     try {
       logger.info('Fetching all events');
-      // const events = await Event.find().sort({ createdAt: -1 });
-      logger.info('Events fetched successfully', { count: 0 });
-      res.json({ events: [], user: req.user });
+      const events = await Event.find().sort({ createdAt: -1 });
+      logger.info('Events fetched successfully', { count: events.length });
+      res.json({ events, user: req.user });
     } catch (err) {
       logger.error('Error fetching events', { error: err.message, stack: err.stack });
       res.status(500).json({ error: "Error fetching events" });

@@ -197,7 +197,12 @@ async function processMessage(message) {
         () => publisher.publish(
           "events",
           JSON.stringify({
-            ...newEvent,
+            _id: newEvent._id,
+            type: newEvent.type,
+            payload: newEvent.payload,
+            sessionId: newEvent.sessionId,
+            sessionContext: newEvent.sessionContext,
+            receivedAt: newEvent.receivedAt,
             traceparent
           })
         ),

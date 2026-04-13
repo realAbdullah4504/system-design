@@ -17,7 +17,7 @@ class SessionController {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         maxAge: 3600000, // 1 hour
-        sameSite: 'strict'
+        sameSite: 'lax'
       });
 
       res.status(201).json({
