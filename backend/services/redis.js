@@ -13,7 +13,7 @@ export const subscribeToEvents = () => {
   });
 };
 
-export const listenToEvents = (clients) => {
+export const listenToEvents = (app) => {
   subscriber.on("message", (channel, message) => {
     const carrier = { traceparent: JSON.parse(message).traceparent };
     const ctx = propagation.extract(context.active(), carrier);
@@ -31,9 +31,9 @@ export const listenToEvents = (clients) => {
           throw new Error("🔥 Manual test error triggered");
         }
 
-        const clientCount = clients.size;
+        const clientCount = app.locals.eventClients.size;
 
-        clients.forEach((client) => {
+        app.locals.eventClients.forEach((client) => {
           client.res.write(`data: ${JSON.stringify(eventData)}\n\n`);
         });
 
