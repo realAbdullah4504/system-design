@@ -1,16 +1,15 @@
 import { SNSClient } from "@aws-sdk/client-sns";
-import dotenv from "dotenv";
-dotenv.config();
+import { config } from "./env.js";
 
-if (!process.env.AWS_REGION || !process.env.TOPIC_ARN) {
+if (!config.aws.region || !config.aws.sns.topicArn) {
     throw new Error("AWS credentials not found");
 }
 export const snsClient = new SNSClient({
-    region: process.env.AWS_REGION,
+    region: config.aws.region,
     // credentials: {
-    //     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    //     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    //     accessKeyId: config.aws.accessKeyId,
+    //     secretAccessKey: config.aws.secretAccessKey,
     // }
 });
 
-export const TOPIC_ARN = process.env.TOPIC_ARN;
+export const TOPIC_ARN = config.aws.sns.topicArn;

@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  backend:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/api-service-repo:latest
+    container_name: backend-prod
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - AWS_REGION=${AWS_REGION}
+      - MONGO_URI=${MONGO_URI}
+      - REDIS_URL=${REDIS_URL}
+      - SQS_QUEUE_URL=${SQS_QUEUE_URL}
+      - TOPIC_ARN=${TOPIC_ARN}
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  notification-worker:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/notification-worker:latest
+    container_name: notification-worker-prod
+    environment:
+      - NODE_ENV=production
+      - AWS_REGION=${AWS_REGION}
+      - SQS_QUEUE_URL=${SQS_QUEUE_URL}
+      - TOPIC_ARN=${TOPIC_ARN}
+    networks:
+      - app-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  main-worker:
+    image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/main-worker:latest
+    container_name: main-worker-prod
+    environment:
+      - NODE_ENV=production
+      - AWS_REGION=${AWS_REGION}
+      - SQS_QUEUE_URL=${SQS_QUEUE_URL}
+      - TOPIC_ARN=${TOPIC_ARN}
+    networks:
+      - app-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+networks:
+  app-network:
+    driver: bridge

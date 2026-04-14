@@ -80,6 +80,43 @@ const sqsErrorsTotal = new promClient.Counter({
   labelNames: ['worker_type', 'operation', 'error_type']
 });
 
+const mongoConnectionState = new promClient.Gauge({
+  name: 'worker_mongo_connection_state',
+  help: 'Mongo connection state (1=connected, 0=disconnected)',
+  labelNames: ['worker_type']
+});
+
+const databaseOperationDuration = new promClient.Histogram({
+  name: 'worker_database_operation_duration_seconds',
+  help: 'Duration of database operations in seconds',
+  labelNames: ['worker_type', 'operation', 'status'],
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10]
+});
+
+const databaseOperationsTotal = new promClient.Counter({
+  name: 'worker_database_operations_total',
+  help: 'Total number of database operations',
+  labelNames: ['worker_type', 'operation', 'status']
+});
+
+const circuitBreakerState = new promClient.Gauge({
+  name: 'worker_circuit_breaker_state',
+  help: 'Circuit breaker state (0=CLOSED, 1=OPEN, 2=HALF_OPEN)',
+  labelNames: ['worker_type', 'circuit_breaker']
+});
+
+const circuitBreakerFailures = new promClient.Counter({
+  name: 'worker_circuit_breaker_failures_total',
+  help: 'Total number of circuit breaker failures',
+  labelNames: ['worker_type', 'circuit_breaker']
+});
+
+const circuitBreakerOperations = new promClient.Counter({
+  name: 'worker_circuit_breaker_operations_total',
+  help: 'Total number of circuit breaker operations attempted',
+  labelNames: ['worker_type', 'circuit_breaker', 'result']
+});
+
 // Export metrics
 export {
   register,
@@ -94,7 +131,13 @@ export {
   exceptionsTotal,
   databaseErrorsTotal,
   redisErrorsTotal,
-  sqsErrorsTotal
+  sqsErrorsTotal,
+  mongoConnectionState,
+  databaseOperationDuration,
+  databaseOperationsTotal,
+  circuitBreakerState,
+  circuitBreakerFailures,
+  circuitBreakerOperations
 };
 
 // Function to get metrics in Prometheus format
@@ -137,10 +180,44 @@ export const recordDatabaseError = (workerType, operation, errorType) => {
   databaseErrorsTotal.labels(workerType, operation, errorType).inc();
 };
 
+export const recordDatabaseOperationStart = (workerType, operation) => {
+  return databaseOperationDuration.startTimer({
+    worker_type: workerType,
+    operation
+  });
+};
+
+export const recordDatabaseOperationSuccess = (timer, workerType, operation) => {
+  timer({ status: 'success' });
+  databaseOperationsTotal.labels(workerType, operation, 'success').inc();
+};
+
+export const recordDatabaseOperationFailure = (timer, workerType, operation) => {
+  timer({ status: 'failure' });
+  databaseOperationsTotal.labels(workerType, operation, 'failure').inc();
+};
+
+export const setMongoConnectionState = (workerType, isConnected) => {
+  mongoConnectionState.labels(workerType).set(isConnected ? 1 : 0);
+};
+
 export const recordRedisError = (workerType, operation, errorType) => {
   redisErrorsTotal.labels(workerType, operation, errorType).inc();
 };
 
 export const recordSQSError = (workerType, operation, errorType) => {
   sqsErrorsTotal.labels(workerType, operation, errorType).inc();
+};
+
+export const setCircuitBreakerState = (workerType, circuitBreakerName, state) => {
+  const stateValue = state === 'CLOSED' ? 0 : state === 'OPEN' ? 1 : 2;
+  circuitBreakerState.labels(workerType, circuitBreakerName).set(stateValue);
+};
+
+export const recordCircuitBreakerFailure = (workerType, circuitBreakerName) => {
+  circuitBreakerFailures.labels(workerType, circuitBreakerName).inc();
+};
+
+export const recordCircuitBreakerOperation = (workerType, circuitBreakerName, result) => {
+  circuitBreakerOperations.labels(workerType, circuitBreakerName, result).inc();
 };

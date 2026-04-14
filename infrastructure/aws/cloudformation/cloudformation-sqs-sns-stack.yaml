@@ -1,0 +1,142 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SQS SNS Stack with LoadTest Events Topic and Queues'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: 'dev'
+    AllowedValues: ['dev', 'staging', 'prod']
+    Description: Environment name
+
+Resources:
+  # SNS Topic
+  LoadTestEventsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'loadtest-events-topic-${Environment}'
+      DisplayName: !Sub 'LoadTest Events Topic - ${Environment}'
+      
+  # Dead Letter Queue
+  DLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'dlq-${Environment}'
+      MessageRetentionPeriod: 1209600  # 14 days in seconds
+      VisibilityTimeout: 300
+
+  # Main Application Queue
+  MyAppJobsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'my-app-jobs-${Environment}'
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 345600  # 4 days in seconds
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DLQ.Arn
+        maxReceiveCount: 3
+
+  # Notification Queue
+  LoadTestNotificationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'loadtest-notification-queue-${Environment}'
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 345600  # 4 days in seconds
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DLQ.Arn
+        maxReceiveCount: 3
+
+  # SQS Queue Policy for MyAppJobsQueue
+  MyAppJobsQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref MyAppJobsQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: sqs:SendMessage
+            Resource: !GetAtt MyAppJobsQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref LoadTestEventsTopic
+
+  # SQS Queue Policy for LoadTestNotificationQueue
+  LoadTestNotificationQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref LoadTestNotificationQueue
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: sqs:SendMessage
+            Resource: !GetAtt LoadTestNotificationQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn: !Ref LoadTestEventsTopic
+
+  # SNS Subscription for MyAppJobsQueue
+  MyAppJobsSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref LoadTestEventsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt MyAppJobsQueue.Arn
+      FilterPolicy: {}  # No filtering, receive all messages
+
+  # SNS Subscription for LoadTestNotificationQueue
+  LoadTestNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref LoadTestEventsTopic
+      Protocol: sqs
+      Endpoint: !GetAtt LoadTestNotificationQueue.Arn
+      FilterPolicy: {}  # No filtering, receive all messages
+
+Outputs:
+  LoadTestEventsTopicArn:
+    Description: 'ARN of the LoadTest Events SNS Topic'
+    Value: !Ref LoadTestEventsTopic
+    Export:
+      Name: !Sub '${Environment}-LoadTestEventsTopicArn'
+
+  MyAppJobsQueueUrl:
+    Description: 'URL of the MyApp Jobs SQS Queue'
+    Value: !Ref MyAppJobsQueue
+    Export:
+      Name: !Sub '${Environment}-MyAppJobsQueueUrl'
+
+  MyAppJobsQueueArn:
+    Description: 'ARN of the MyApp Jobs SQS Queue'
+    Value: !GetAtt MyAppJobsQueue.Arn
+    Export:
+      Name: !Sub '${Environment}-MyAppJobsQueueArn'
+
+  LoadTestNotificationQueueUrl:
+    Description: 'URL of the LoadTest Notification SQS Queue'
+    Value: !Ref LoadTestNotificationQueue
+    Export:
+      Name: !Sub '${Environment}-LoadTestNotificationQueueUrl'
+
+  LoadTestNotificationQueueArn:
+    Description: 'ARN of the LoadTest Notification SQS Queue'
+    Value: !GetAtt LoadTestNotificationQueue.Arn
+    Export:
+      Name: !Sub '${Environment}-LoadTestNotificationQueueArn'
+
+  DLQueueUrl:
+    Description: 'URL of the Dead Letter Queue'
+    Value: !Ref DLQ
+    Export:
+      Name: !Sub '${Environment}-DLQueueUrl'
+
+  DLQueueArn:
+    Description: 'ARN of the Dead Letter Queue'
+    Value: !GetAtt DLQ.Arn
+    Export:
+      Name: !Sub '${Environment}-DLQueueArn'

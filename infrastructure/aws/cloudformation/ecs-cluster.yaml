@@ -1,0 +1,281 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Minimal ECS Fargate Cluster
+
+Parameters:
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Subnet ID for ECS resources
+    Default: subnet-016fa8e2544040acd  # Replace with your default subnet ID
+  ImageTag:
+    Type: String
+    Description: Image tag for the backend service
+    Default: c8241589c88d1fd80d773fede4e0cb1e7ef73f1b
+  EnvironmentName:
+    Type: String
+    Default: dev
+    Description: Environment name (dev, staging, prod)
+  AwsRegion:
+    Type: String
+    Default: us-east-1
+    Description: AWS Region
+  RedisHost:
+    Type: String
+    Description: Redis host
+    Default: redis-18619.c283.us-east-1-4.ec2.cloud.redislabs.com
+  RedisPort:
+    Type: String
+    Description: Redis port
+    Default: "18619"
+
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: ecs-cluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+
+  ECSExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Path: /
+      Policies:
+        - PolicyName: SecretsManagerAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*"
+
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ecs-tasks.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+        - PolicyName: SNSPublishPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: 
+                  Fn::ImportValue: !Sub "${EnvironmentName}-LoadTestEventsTopicArn"
+        - PolicyName: SQSAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:GetQueueUrl
+                Resource: 
+                  Fn::ImportValue: !Sub "${EnvironmentName}-MyAppJobsQueueArn"
+
+  BackendLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/backend-task
+      RetentionInDays: 7
+
+  MainWorkerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/main-worker-task
+      RetentionInDays: 7
+
+  BackendTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: backend-task
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: backend-container
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/api-service-repo:${ImageTag}'
+          PortMappings:
+            - ContainerPort: 3000
+              Protocol: tcp
+          Secrets:
+            - Name: MONGO_URI
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-MongoDBPrimarySecretArn"
+            - Name: SQS_QUEUE_URL
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-SqsQueueUrlSecretArn"
+            - Name: SQS_QUEUE_ARN
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-SqsQueueArnSecretArn"
+            - Name: TOPIC_ARN
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-TopicArnSecretArn"
+            - Name: REDIS_PASSWORD
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-RedisPasswordSecretArn"
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: AWS_REGION
+              Value: !Ref AwsRegion
+            - Name: REDIS_HOST
+              Value: !Ref RedisHost
+            - Name: REDIS_PORT
+              Value: !Ref RedisPort
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref BackendLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  MainWorkerTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: main-worker-task
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: main-worker-container
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/main-worker:${ImageTag}'
+          Secrets:
+            - Name: MONGO_URI
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-MongoDBPrimarySecretArn"
+            - Name: SQS_QUEUE_URL
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-SqsQueueUrlSecretArn"
+            - Name: SQS_QUEUE_ARN
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-SqsQueueArnSecretArn"
+            - Name: TOPIC_ARN
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-TopicArnSecretArn"
+            - Name: REDIS_PASSWORD
+              ValueFrom:
+                Fn::ImportValue: !Sub "${EnvironmentName}-RedisPasswordSecretArn"
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: AWS_REGION
+              Value: !Ref AwsRegion
+            - Name: REDIS_HOST
+              Value: !Ref RedisHost
+            - Name: REDIS_PORT
+              Value: !Ref RedisPort
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref MainWorkerLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  BackendService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: backend-service
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref BackendTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref SubnetId
+          AssignPublicIp: ENABLED
+
+  MainWorkerService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: main-worker-service
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref MainWorkerTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref SubnetId
+          AssignPublicIp: ENABLED
+
+Outputs:
+  ECSClusterName:
+    Description: ECS Cluster Name
+    Value:
+      Ref: ECSCluster
+    Export:
+      Name: 
+        Fn::Sub: '${AWS::StackName}-ECSCluster'
+  ECSExecutionRoleArn:
+    Description: ECS Task Execution Role ARN
+    Value: 
+      Fn::GetAtt: [ECSExecutionRole, Arn]
+    Export:
+      Name: 
+        Fn::Sub: '${AWS::StackName}-ECSExecutionRole'
+  ECSTaskRoleArn:
+    Description: ECS Task Role ARN
+    Value: 
+      Fn::GetAtt: [ECSTaskRole, Arn]
+    Export:
+      Name: 
+        Fn::Sub: '${AWS::StackName}-ECSTaskRole'
+  BackendTaskDefinitionArn:
+    Description: Backend Task Definition ARN
+    Value: 
+      Ref: BackendTaskDefinition
+    Export:
+      Name: 
+        Fn::Sub: '${AWS::StackName}-BackendTaskDefinition'
+  BackendServiceName:
+    Description: Backend Service Name
+    Value: 
+      Ref: BackendService
+    Export:
+      Name: 
+        Fn::Sub: '${AWS::StackName}-BackendService'
+  MainWorkerTaskDefinitionArn:
+    Description: Main Worker Task Definition ARN
+    Value: 
+      Ref: MainWorkerTaskDefinition
+    Export:
+      Name: 
+        Fn::Sub: '${AWS::StackName}-MainWorkerTaskDefinition'
+  MainWorkerServiceName:
+    Description: Main Worker Service Name
+    Value: 
+      Ref: MainWorkerService
+    Export:
+      Name: 
+        Fn::Sub: '${AWS::StackName}-MainWorkerService'

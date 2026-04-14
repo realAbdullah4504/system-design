@@ -1,4 +1,4 @@
-import { receiveMessages, deleteMessage } from "./services/sqs.js";
+import { receiveMessages, deleteMessage, testSQSConnection } from "./services/sqs.js";
 import { createTracingSDK } from "./config/otel.js";
 const sdk = createTracingSDK("worker-service");
 await sdk.start();
@@ -8,6 +8,9 @@ import "./config/mongo.js";
 import Event from "./models/event.js";
 import { publisher } from "./config/redis.js";
 import logger from "./config/logger.js";
+import sessionReader from "./services/session-reader.js";
+import CircuitBreaker from "./services/circuit-breaker.js";
+import RetryService from "./services/retry-service.js";
 import { context, propagation, trace, SpanStatusCode } from "@opentelemetry/api";
 import {
   recordJobStart,
@@ -17,8 +20,14 @@ import {
   setWorkerHealth,
   recordException,
   recordDatabaseError,
+  recordDatabaseOperationStart,
+  recordDatabaseOperationSuccess,
+  recordDatabaseOperationFailure,
   recordRedisError,
   recordSQSError,
+  setCircuitBreakerState,
+  recordCircuitBreakerFailure,
+  recordCircuitBreakerOperation,
   workerUptime,
   queueDepth
 } from "./services/prom.js";
@@ -26,6 +35,46 @@ import "./metrics-server.js";
 
 // Worker type identifier
 const WORKER_TYPE = "main-worker";
+
+// Circuit breaker instances
+const dbCircuitBreaker = new CircuitBreaker({
+  name: 'database',
+  failureThreshold: 1,
+  resetTimeout: 30000, // 30 seconds
+  monitoringPeriod: 5000 // 5 seconds
+});
+
+const redisCircuitBreaker = new CircuitBreaker({
+  name: 'redis',
+  failureThreshold: 3,
+  resetTimeout: 30000, // 30 seconds
+  monitoringPeriod: 5000 // 5 seconds
+});
+
+// Retry service for SQS operations
+const sqsRetryService = new RetryService({
+  maxRetries: 3,
+  baseDelay: 500,
+  maxDelay: 5000,
+  retryableErrors: ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ServiceUnavailable', 'RequestTimeout']
+});
+
+// Initialize circuit breaker monitoring
+setCircuitBreakerState(WORKER_TYPE, 'database', dbCircuitBreaker.getState().state);
+setCircuitBreakerState(WORKER_TYPE, 'redis', redisCircuitBreaker.getState().state);
+
+// Test SQS connection on startup
+try {
+  await sqsRetryService.execute(() => testSQSConnection(), {
+    operationName: 'test-connection',
+    maxRetries: 5,
+    baseDelay: 1000
+  });
+  logger.info('SQS connection test passed');
+} catch (error) {
+  logger.error('SQS connection test failed', { error: error.message });
+  process.exit(1);
+}
 
 // Track worker start time
 const workerStartTime = Date.now();
@@ -83,22 +132,39 @@ async function processMessage(message) {
     span.setAttribute("sqs.queue_arn", process.env.SQS_QUEUE_ARN || 'unknown');
     
     logger.debug('Started span', { traceId: span.spanContext().traceId });
+    let jobStartTime;
+    let messageBody = JSON.parse(snsMessage.Message);
+    const jobTimer = recordJobStart(WORKER_TYPE, messageBody.type);
+    jobStartTime = Date.now();
 
     try {
-      const messageBody = JSON.parse(snsMessage.Message);
+      // Enrich message with session context if sessionId is provided
+      if (messageBody.sessionId) {
+        console.log('messageBody', messageBody);
+        messageBody = await sessionReader.enrichMessageWithSession(messageBody, messageBody.sessionId);
+        logger.debug('Message enriched with session context', { 
+          sessionId: messageBody.sessionId,
+          hasUser: !!messageBody.sessionContext?.user
+        });
+      }
+
       logger.debug('Parsed message body', { type: messageBody.type, hasPayload: !!messageBody.payload });
 
-      // Start job timer and capture start time
-      const jobStartTime = Date.now();
-      const jobTimer = recordJobStart(WORKER_TYPE, messageBody.type);
       logger.info('Job processing started', { 
         messageId: message.MessageId, 
         jobType: messageBody.type,
-        startTime: jobStartTime
+        startTime: jobStartTime,
+        sessionId: messageBody.sessionId
       });
       
       span.setAttribute("job.type", messageBody.type);
       span.setAttribute("sqs.message_id", message.MessageId);
+      if (messageBody.sessionId) {
+        span.setAttribute("session.id", messageBody.sessionId);
+        if (messageBody.sessionContext?.user?.id) {
+          span.setAttribute("user.id", messageBody.sessionContext.user.id);
+        }
+      }
 
       // Simulate work
       logger.debug('Simulating work', { duration: messageBody.duration || 100 });
@@ -107,18 +173,40 @@ async function processMessage(message) {
       );
 
       logger.debug('Creating event in database');
-      const newEvent = await Event.create({
-        type: messageBody.type,
-        payload: messageBody.payload,
-      });
+      const dbOp = 'event_create';
+      const dbTimer = recordDatabaseOperationStart(WORKER_TYPE, dbOp);
+      let newEvent;
+      try {
+        newEvent = await dbCircuitBreaker.execute(
+          () => Event.create({
+            type: messageBody.type,
+            payload: messageBody.payload,
+            sessionId: messageBody.sessionId,
+            sessionContext: messageBody.sessionContext,
+          }),
+          'database-create'
+        );
+        recordDatabaseOperationSuccess(dbTimer, WORKER_TYPE, dbOp);
+      } catch (dbError) {
+        recordDatabaseOperationFailure(dbTimer, WORKER_TYPE, dbOp);
+        throw dbError;
+      }
       logger.info('Event created', { eventId: newEvent._id });
 
-      await publisher.publish(
-        "events",
-        JSON.stringify({
-          ...newEvent,
-          traceparent
-        })
+      await redisCircuitBreaker.execute(
+        () => publisher.publish(
+          "events",
+          JSON.stringify({
+            _id: newEvent._id,
+            type: newEvent.type,
+            payload: newEvent.payload,
+            sessionId: newEvent.sessionId,
+            sessionContext: newEvent.sessionContext,
+            receivedAt: newEvent.receivedAt,
+            traceparent
+          })
+        ),
+        'redis-publish'
       );
       logger.debug('Published event to Redis');
 
@@ -138,11 +226,18 @@ async function processMessage(message) {
       // Record job success
       recordJobSuccess(jobTimer, WORKER_TYPE, messageBody.type);
 
-      await deleteMessage(QUEUE_URL, message.ReceiptHandle);
+      await sqsRetryService.execute(() => deleteMessage(QUEUE_URL, message.ReceiptHandle), {
+        operationName: 'delete-message',
+        maxRetries: 2 // Fewer retries for delete since message is already processed
+      });
     } catch (error) {
       // Calculate processing time even for failures
       const processingTimeMs = Date.now() - jobStartTime;
       const processingTimeSec = processingTimeMs / 1000;
+      
+      // Log circuit breaker states if relevant
+      const dbState = dbCircuitBreaker.getState();
+      const redisState = redisCircuitBreaker.getState();
       
       logger.error('Error processing message', { 
         messageId: message.MessageId,
@@ -153,8 +248,21 @@ async function processMessage(message) {
         stack: error.stack,
         name: error.name,
         queueUrl: QUEUE_URL,
-        queueArn: process.env.SQS_QUEUE_ARN || 'unknown'
+        queueArn: process.env.SQS_QUEUE_ARN || 'unknown',
+        circuitBreakers: {
+          database: dbState,
+          redis: redisState
+        }
       });
+      
+      // Record circuit breaker specific errors
+      if (error.message.includes('Circuit breaker is OPEN')) {
+        if (error.message.includes('database-create')) {
+          recordDatabaseError(WORKER_TYPE, 'circuit_breaker_open');
+        } else if (error.message.includes('redis-publish')) {
+          recordRedisError(WORKER_TYPE, 'circuit_breaker_open');
+        }
+      }
       
       // Record job failure
       recordJobFailure(jobTimer, WORKER_TYPE, messageBody?.type || 'unknown', error.name);
@@ -207,7 +315,9 @@ async function pollQueue() {
   while (true) {
     try {
       logger.debug('Polling queue', { queueUrl: QUEUE_URL });
-      const data = await receiveMessages(QUEUE_URL);
+      const data = await sqsRetryService.execute(() => receiveMessages(QUEUE_URL), {
+        operationName: 'receive-messages'
+      });
 
       // Update queue depth metric
       if (data.Messages) {

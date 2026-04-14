@@ -3,13 +3,15 @@ import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentation
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+import { config } from "./env.js";
 
 const sdk = new NodeSDK({
   resource: resourceFromAttributes({
-    [SemanticResourceAttributes.SERVICE_NAME]: "system-design-service",
+    [SemanticResourceAttributes.SERVICE_NAME]: config.otel.serviceName || "system-design-service",
+    [SemanticResourceAttributes.SERVICE_VERSION]: config.otel.serviceVersion,
   }),
   traceExporter: new OTLPTraceExporter({
-    url: "http://localhost:4318/v1/traces", // Collector endpoint
+    url: config.otel.exporterEndpoint || "http://localhost:4318/v1/traces",
   }),
   instrumentations: [getNodeAutoInstrumentations()],
 });

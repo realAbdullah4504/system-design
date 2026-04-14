@@ -1,11 +1,12 @@
 // config/redis.js
 import Redis from "ioredis";
+import { config } from "./env.js";
 
 // Base config shared across all clients
 const baseConfig = {
-  host: process.env.REDIS_HOST || "localhost",
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
+  host: config.redis.host,
+  port: config.redis.port,
+  password: config.redis.password,
   retryDelayOnFailover: 100,
   maxRetriesPerRequest: 3,
   lazyConnect: true,

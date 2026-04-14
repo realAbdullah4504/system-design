@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CodeBuild formation for Docker build and ECR repository
+
+Parameters:
+  GitHubRepoUrl:
+    Type: String
+    Default: https://github.com/realAbdullah4504/system-design.git
+    Description: GitHub repository URL (e.g., https://github.com/username/repo.git)
+  GitHubBranch:
+    Type: String
+    Default: stage-4
+    Description: GitHub branch to build from
+
+Resources:
+
+  #########################################
+  # ECR Repositories
+  #########################################
+  ApiServiceRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: api-service-repo
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  NotificationWorkerECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: notification-worker
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  MainWorkerECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: main-worker
+      ImageScanningConfiguration:
+        ScanOnPush: true
+
+  #########################################
+  # CodeBuild for Docker Build
+  #########################################
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AWSCodeBuildDeveloperAccess
+      Policies:
+        - PolicyName: ECR-Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                  - ecr:PutImage
+                  - ecr:BatchGetImage
+                  - ecr:GetDownloadUrlForLayer
+                Resource: '*'
+        - PolicyName: CloudWatchLogs-Policy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+
+  MultiServiceCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: multi-service-docker-build
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Source:
+        Type: GITHUB
+        Location: !Ref GitHubRepoUrl
+        BuildSpec: deployment/buildspec.yml
+        GitCloneDepth: 1
+      SourceVersion: !Ref GitHubBranch
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:4.0
+        EnvironmentVariables:
+          - Name: AWS_DEFAULT_REGION
+            Value: us-east-1
+          - Name: AWS_ACCOUNT_ID
+            Value: !Ref AWS::AccountId
+          - Name: IMAGE_REPO_NAME
+            Value: !Ref ApiServiceRepository
+          - Name: NOTIFICATION_WORKER_REPO_NAME
+            Value: !Ref NotificationWorkerECRRepository
+          - Name: MAIN_WORKER_REPO_NAME
+            Value: !Ref MainWorkerECRRepository
+          - Name: IMAGE_TAG
+            Value: latest
+          - Name: BRANCH
+            Value: !Ref GitHubBranch
+      Artifacts:
+        Type: NO_ARTIFACTS
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: /aws/codebuild/multi-service-docker-build
+          StreamName: build-logs
+
+#########################################
+# Outputs
+#########################################
+Outputs:
+  ApiServiceRepositoryName:
+    Value: !Ref ApiServiceRepository
+    Description: Name of the API service ECR repository
+  NotificationWorkerECRRepositoryName:
+    Value: !Ref NotificationWorkerECRRepository
+    Description: Name of the notification worker ECR repository
+  MainWorkerECRRepositoryName:
+    Value: !Ref MainWorkerECRRepository
+    Description: Name of the main worker ECR repository
+  CodeBuildProjectName:
+    Value: !Ref MultiServiceCodeBuildProject
+    Description: Name of the multi-service CodeBuild project
