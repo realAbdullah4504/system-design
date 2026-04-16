@@ -68,7 +68,7 @@ app.post("/jobs", async (req, res) => {
     });
 
     // Then add to queue with the job ID
-    await jobQueue.add("process-job", {
+    await jobQueue.add("jobs", {
       jobId: job._id,
     });
 
