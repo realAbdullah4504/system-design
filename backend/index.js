@@ -4,9 +4,11 @@ const mongoose = require("mongoose");
 const jobQueue = require("./queue/jobQueue");
 const Job = require("./models/Job");
 const TokenService = require("./services/tokenService");
+const cors = require("cors");
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 const mongoUri = process.env.MONGO_URI;
 if (!mongoUri) {
@@ -59,11 +61,18 @@ app.post("/jobs", async (req, res) => {
   }
 
   try {
-    await jobQueue.add("process-job", {
-      jobId: name,
+    // Create job document in MongoDB first
+    const job = await Job.create({
+      name: name,
+      status: "CREATED",
     });
 
-    res.status(202).json({ jobId: name });
+    // Then add to queue with the job ID
+    await jobQueue.add("process-job", {
+      jobId: job._id,
+    });
+
+    res.status(202).json({ jobId: job._id });
   } catch (error) {
     console.error("Error creating job:", error);
     res.status(500).json({ error: "Failed to create job" });
