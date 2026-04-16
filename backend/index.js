@@ -1,3 +1,4 @@
+require('dotenv').config({ path: __dirname + '/.env' });
 const express = require("express");
 const mongoose = require("mongoose");
 const jobQueue = require("./queue/jobQueue");
@@ -6,7 +7,18 @@ const Job = require("./models/Job");
 const app = express();
 app.use(express.json());
 
-mongoose.connect("mongodb://127.0.0.1:27017/jobs");
+const mongoUri = process.env.MONGO_URI;
+if (!mongoUri) {
+  console.error('MONGO_URI is not defined in environment variables');
+  process.exit(1);
+}
+
+mongoose.connect(mongoUri)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => {
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
+  });
 
 app.post("/jobs", async (req, res) => {
   const { name } = req.body;
