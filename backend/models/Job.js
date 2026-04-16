@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require("uuid");
 const jobSchema = new mongoose.Schema(
   {
     id: { type: String, default: uuidv4, index: true },
-    name: { type: String, required: true },
+    name: { type: String, required: true, unique: true },
 
     status: {
       type: String,
