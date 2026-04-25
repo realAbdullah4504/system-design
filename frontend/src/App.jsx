@@ -3,18 +3,13 @@ import './App.css'
 import { useState } from 'react'
 
 function App() {
-  const [token, setToken] = useState("");
   const [jobName, setJobName] = useState("");
-  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [jobId, setJobId] = useState("");
 
   const API_BASE = "http://localhost:3000";
 
-  const generateToken = async () => {
-    setLoading(true);
-    setMessage("");
-    
+  const ensureToken = async () => {
     try {
       const response = await fetch(`${API_BASE}/tokens`, {
         method: "POST",
@@ -27,33 +22,20 @@ function App() {
       const data = await response.json();
       
       if (response.ok) {
-        setToken(data.token);
-        setMessage(`Token generated! Expires in ${data.expiresIn} seconds`);
+        return data.token;
       } else {
-        setMessage(`Error: ${data.error}`);
+        throw new Error(data.error || 'Failed to generate token');
       }
     } catch (error) {
-      setMessage(`Network error: ${error.message}`);
-    } finally {
-      setLoading(false);
+      throw new Error(`Token generation failed: ${error.message}`);
     }
   };
 
   const createJob = async () => {
-    if (!jobName.trim()) {
-      setMessage("Please enter a job name");
-      return;
-    }
-    
-    if (!token) {
-      setMessage("Please generate a token first");
-      return;
-    }
-
-    setLoading(true);
-    setMessage("");
-    
     try {
+      // Automatically generate token when creating job
+      const token = await ensureToken();
+      
       const response = await fetch(`${API_BASE}/jobs`, {
         method: "POST",
         headers: {
@@ -69,42 +51,23 @@ function App() {
       
       if (response.ok) {
         setJobId(data.jobId);
+        setJobName(""); // Clear form
         setMessage(`Job created successfully! Job ID: ${data.jobId}`);
-        setToken(""); // Clear token after use
       } else {
         setMessage(`Error: ${data.error}${data.reason ? ` - ${data.reason}` : ""}`);
       }
     } catch (error) {
-      setMessage(`Network error: ${error.message}`);
-    } finally {
-      setLoading(false);
+      setMessage(error.message);
     }
   };
+
 
   return (
     <div className="container">
       <h1>Job Processing System</h1>
       
-      <div className="section">
-        <h2>1. Generate Token</h2>
-        <button 
-          onClick={generateToken} 
-          disabled={loading}
-          className="token-btn"
-        >
-          {loading ? "Generating..." : "Generate Token"}
-        </button>
-        
-        {token && (
-          <div className="token-display">
-            <p><strong>Token:</strong> {token}</p>
-            <small>This token will be consumed when creating a job</small>
-          </div>
-        )}
-      </div>
-
-      <div className="section">
-        <h2>2. Create Job</h2>
+      <div className="job-form-section">
+        <h2>Create New Job</h2>
         <div className="job-form">
           <input
             type="text"
@@ -114,17 +77,16 @@ function App() {
             className="job-input"
           />
           <button 
-            onClick={createJob} 
-            disabled={loading || !token}
+            onClick={createJob}
             className="job-btn"
           >
-            {loading ? "Creating..." : "Create Job"}
+            Create Job
           </button>
         </div>
       </div>
 
       {message && (
-        <div className={`message ${message.includes("Error") ? "error" : "success"}`}>
+        <div className={`message ${message.includes("Error") || message.includes("failed") ? "error" : "success"}`}>
           {message}
         </div>
       )}
