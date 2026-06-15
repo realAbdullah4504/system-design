@@ -23,13 +23,13 @@ aws cloudformation deploy \
 aws cloudformation deploy \
   --template-file infrastructure/aws/cloudformation/ecs-cluster.yaml \
   --stack-name ecs-cluster \
-  --parameter-overrides ClusterName=my-production-cluster DesiredCapacity=2 KeyName=keypair \
+  --parameter-overrides ClusterName=my-production-cluster DesiredCapacity=2 KeyName=keypair ImageTag=f570e0cdd1fb5241185955ddebf87ecdda39c295 \
   --capabilities CAPABILITY_NAMED_IAM
 
 aws cloudformation deploy \
   --template-file infrastructure/aws/cloudformation/app-build.yaml \
   --stack-name app-build \
-  --parameter-overrides GitHubRepoUrl=https://github.com/realAbdullah4504/system-design.git GitHubBranch=stage-4 \
+  --parameter-overrides GitHubRepoUrl=https://github.com/realAbdullah4504/system-design.git GitHubBranch=stage-5 \
   --capabilities CAPABILITY_NAMED_IAM
 
 

@@ -9,7 +9,7 @@ Parameters:
   ImageTag:
     Type: String
     Description: Image tag for the backend service
-    Default: c8241589c88d1fd80d773fede4e0cb1e7ef73f1b
+    Default: f570e0cdd1fb5241185955ddebf87ecdda39c295
   EnvironmentName:
     Type: String
     Default: dev
