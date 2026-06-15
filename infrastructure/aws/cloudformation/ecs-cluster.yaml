@@ -256,6 +256,7 @@ Resources:
             - Name: REDIS_PASSWORD
               ValueFrom: !ImportValue
                 Fn::Sub: ${EnvironmentName}-RedisPasswordSecretArn
+            
           Environment:
             - Name: NODE_ENV
               Value: production
@@ -265,12 +266,50 @@ Resources:
               Value: !Ref RedisHost
             - Name: REDIS_PORT
               Value: !Ref RedisPort
+            # 👇 IMPORTANT: OTEL sends to sidecar locally
+            - Name: OTEL_EXPORTER_OTLP_ENDPOINT
+              Value: http://localhost:4318/v1/traces
+            - Name: OTEL_SERVICE_NAME
+              Value: main-worker-service
+
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: !Ref MainWorkerLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
+
+        # =========================
+        # 2. ADOT SIDECAR
+        # =========================
+        - Name: adot-collector
+          Image: public.ecr.aws/aws-observability/aws-otel-collector:latest
+          Essential: true
+
+          # Tell ADOT which built-in config to use
+          Command:
+            - "--config=env:AOT_CONFIG_CONTENT"   # 👈 reads config from env var
+
+          Secrets:
+            - Name: AOT_CONFIG_CONTENT
+              ValueFrom: "arn:aws:ssm:us-east-1:976589843272:parameter/observability/adot-config" 
+
+          PortMappings:
+            - ContainerPort: 4317
+              Protocol: tcp
+            - ContainerPort: 4318
+              Protocol: tcp
+
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref AwsRegion
+
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref BackendLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: adot
 
   BackendService:
     Type: AWS::ECS::Service
