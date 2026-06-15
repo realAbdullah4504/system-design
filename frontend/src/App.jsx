@@ -9,7 +9,7 @@ function App() {
   // Create session on page load
   const createSession = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/sessions", {
+      const response = await fetch("http://100.31.76.6:3000/api/sessions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -52,7 +52,7 @@ function App() {
       headers['x-session-id'] = sessionId;
     }
 
-    fetch("http://localhost:3000/api/events", {
+    fetch("http://100.31.76.6:3000/api/events", {
       headers
     })
       .then((res) => res.json())
@@ -79,7 +79,7 @@ function App() {
       if (storedSessionId) {
         // Validate stored session with server
         try {
-          const response = await fetch("http://localhost:3000/api/current", {
+          const response = await fetch("http://100.31.76.6:3000/api/current", {
             headers: {
               'x-session-id': storedSessionId
             }
@@ -116,7 +116,7 @@ function App() {
     
     initializeApp();
 
-    const eventSource = new EventSource("http://localhost:3000/api/events/stream");
+    const eventSource = new EventSource("http://100.31.76.6:3000/api/events/stream");
     
     eventSource.onopen = () => {
       console.log("SSE connection opened");
@@ -172,7 +172,7 @@ function App() {
         headers['x-session-id'] = sessionId;
       }
 
-      const response = await fetch("http://localhost:3000/api/events/send", {
+      const response = await fetch("http://100.31.76.6:3000/api/events/send", {
         method: "POST",
         headers,
         body: JSON.stringify({

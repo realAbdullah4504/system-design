@@ -61,6 +61,15 @@ Resources:
                   - secretsmanager:GetSecretValue
                 Resource:
                   - !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*
+        - PolicyName: SSMParameterAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters   # Note: plural - ECS uses GetParameters not GetParameter
+                Resource:
+                  - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/observability/adot-config
 
   ECSTaskRole:
     Type: AWS::IAM::Role
@@ -97,6 +106,18 @@ Resources:
                   - sqs:GetQueueUrl
                 Resource: !ImportValue
                   Fn::Sub: ${EnvironmentName}-MyAppJobsQueueArn
+        - PolicyName: AWSXrayPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - xray:PutTraceSegments
+                  - xray:PutTelemetryRecords
+                  - xray:GetSamplingRules
+                  - xray:GetSamplingTargets
+                  - xray:GetSamplingStatisticSummaries
+                Resource: "*"
 
   BackendLogGroup:
     Type: AWS::Logs::LogGroup
@@ -121,12 +142,34 @@ Resources:
         - FARGATE
       ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
       TaskRoleArn: !GetAtt ECSTaskRole.Arn
+
       ContainerDefinitions:
+
+        # =========================
+        # 1. BACKEND CONTAINER
+        # =========================
         - Name: backend-container
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/api-service-repo:${ImageTag}
           PortMappings:
             - ContainerPort: 3000
               Protocol: tcp
+
+          Environment:
+            - Name: NODE_ENV
+              Value: production
+            - Name: AWS_REGION
+              Value: !Ref AwsRegion
+            - Name: REDIS_HOST
+              Value: !Ref RedisHost
+            - Name: REDIS_PORT
+              Value: !Ref RedisPort
+
+            # 👇 IMPORTANT: OTEL sends to sidecar locally
+            - Name: OTEL_EXPORTER_OTLP_ENDPOINT
+              Value: http://localhost:4318/v1/traces
+            - Name: OTEL_SERVICE_NAME
+              Value: backend-service
+
           Secrets:
             - Name: MONGO_URI
               ValueFrom: !ImportValue
@@ -143,21 +186,45 @@ Resources:
             - Name: REDIS_PASSWORD
               ValueFrom: !ImportValue
                 Fn::Sub: ${EnvironmentName}-RedisPasswordSecretArn
-          Environment:
-            - Name: NODE_ENV
-              Value: production
-            - Name: AWS_REGION
-              Value: !Ref AwsRegion
-            - Name: REDIS_HOST
-              Value: !Ref RedisHost
-            - Name: REDIS_PORT
-              Value: !Ref RedisPort
+
           LogConfiguration:
             LogDriver: awslogs
             Options:
               awslogs-group: !Ref BackendLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
+
+        # =========================
+        # 2. ADOT SIDECAR
+        # =========================
+        - Name: adot-collector
+          Image: public.ecr.aws/aws-observability/aws-otel-collector:latest
+          Essential: true
+
+          # Tell ADOT which built-in config to use
+          Command:
+            - "--config=env:AOT_CONFIG_CONTENT"   # 👈 reads config from env var
+
+          Secrets:
+            - Name: AOT_CONFIG_CONTENT
+              ValueFrom: "arn:aws:ssm:us-east-1:976589843272:parameter/observability/adot-config" 
+
+          PortMappings:
+            - ContainerPort: 4317
+              Protocol: tcp
+            - ContainerPort: 4318
+              Protocol: tcp
+
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref AwsRegion
+
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref BackendLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: adot
 
   MainWorkerTaskDefinition:
     Type: AWS::ECS::TaskDefinition

@@ -26,6 +26,12 @@ aws cloudformation deploy \
   --parameter-overrides ClusterName=my-production-cluster DesiredCapacity=2 KeyName=keypair ImageTag=f570e0cdd1fb5241185955ddebf87ecdda39c295 \
   --capabilities CAPABILITY_NAMED_IAM
 
+MSYS_NO_PATHCONV=1 aws ssm put-parameter \
+  --name "/observability/adot-config" \
+  --type "String" \
+  --value file://infrastructure/aws/cloudformation/ecs-adot-config.yaml \
+  --overwrite
+
 aws cloudformation deploy \
   --template-file infrastructure/aws/cloudformation/app-build.yaml \
   --stack-name app-build \
