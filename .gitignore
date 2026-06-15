@@ -3,3 +3,5 @@ node_modules/
 *.pem
 aws-command-with-secrets.md
 ./logs/
+infrastructure/aws/cloudformation/params.json
+*.log

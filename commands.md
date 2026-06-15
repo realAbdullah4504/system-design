@@ -6,6 +6,20 @@ aws ec2 create-key-pair --key-name keypair --query 'KeyMaterial' --output text >
 chmod 400 keypair.pem
  
 # Then deploy with the key name
+
+aws cloudformation deploy \
+  --template-file infrastructure/aws/cloudformation/cloudformation-sqs-sns-stack.yaml \
+  --stack-name sqs-sns-stack \
+  --parameter-overrides Environment=dev \
+  --capabilities CAPABILITY_NAMED_IAM
+
+
+aws cloudformation deploy \
+  --template-file infrastructure/aws/cloudformation/secrets.yaml \
+  --stack-name secrets \
+  --region us-east-1 \
+  --parameter-overrides file://infrastructure/aws/cloudformation/params.json
+
 aws cloudformation deploy \
   --template-file infrastructure/aws/cloudformation/ecs-cluster.yaml \
   --stack-name ecs-cluster \
@@ -18,11 +32,6 @@ aws cloudformation deploy \
   --parameter-overrides GitHubRepoUrl=https://github.com/realAbdullah4504/system-design.git GitHubBranch=stage-4 \
   --capabilities CAPABILITY_NAMED_IAM
 
-aws cloudformation deploy \
-  --template-file infrastructure/aws/cloudformation/cloudformation-sqs-sns-stack.yaml \
-  --stack-name sqs-sns-stack \
-  --parameter-overrides Environment=dev \
-  --capabilities CAPABILITY_NAMED_IAM
 
 
 ## AWS Secrets Manager
