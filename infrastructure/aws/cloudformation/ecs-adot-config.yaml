@@ -8,17 +8,21 @@ receivers:
 
 processors:
   batch:
+    timeout: 5s
+    send_batch_size: 512
+
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 400
+    spike_limit_mib: 100
 
 exporters:
   awsxray:
     region: us-east-1
 
-  debug:
-    verbosity: detailed
-
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [debug, awsxray]
+      processors: [memory_limiter, batch]
+      exporters: [awsxray]
